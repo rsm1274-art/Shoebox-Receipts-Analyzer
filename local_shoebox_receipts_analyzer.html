@@ -1,304 +1,981 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shoebox Receipts Analyzer — 100% Local Edition</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Typekit: Abolition (display) + Proxima Nova (body) -->
+    <link rel="stylesheet" href="https://use.typekit.net/wqy7ecr.css">
     <!-- Tesseract.js for 100% Client-Side Local OCR -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        slate: {
-                            850: '#151e2e',
-                            900: '#0f172a',
-                            950: '#080d1a',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
     <style>
+        /* ---------------------------------------------------------------
+         * Design tokens — industrycity.com design system
+         * Neo-brutalist editorial: paper ground, 2px black rules, no radius, no shadow.
+         * ------------------------------------------------------------- */
+        :root {
+            --proxima-font: "proxima-nova", "Helvetica Neue", Arial, sans-serif;
+            --abolition-font: "Abolition", "Arial Narrow", sans-serif;
+            /* Neue Machina is self-hosted on the source site and is not in this repo; falls back to a bold sans. */
+            --nueue-font: "Neue Machina", "Arial Black", sans-serif;
+
+            --bg: #FBF9F5;
+            --white: #FFFFFF;
+            --black: #000000;
+            --amber: #fab36a;
+            --cream: #fbe6c1;
+            --burnt-orange: #e05829;
+            --sage: #e5e7da;
+            --teal: #DCEBD7;
+            --olive-light: #b2b792;
+            --grey: #6a6b6b;
+
+            --rule: 2px solid #000;
+            --transition-interaction: all 0.3s ease;
+            --transition-structure: all 1s ease;
+            --pad-section: clamp(2rem, 2.2vw, 3rem);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+        ::selection { background: var(--amber); color: var(--black); }
+
+        html { font-size: 16px; background: var(--bg); }
         body {
-            background-color: #080d1a;
-            color: #f1f5f9;
-        }
-        .receipt-paper {
-            background: #fdfbf7;
-            color: #1e293b;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
             position: relative;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--black);
+            background: var(--bg);
+            font-family: var(--proxima-font);
+            font-size: 16px;
+            line-height: 1.4;
+            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
         }
-        .receipt-paper::before {
+
+        h1, h2, h4, h5, h6 {
+            margin: 0;
+            font-family: var(--abolition-font);
+            font-weight: 400;
+            text-transform: uppercase;
+            line-height: 1.1;
+            color: var(--black);
+        }
+        h3 {
+            margin: 0;
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        p { margin: 0; }
+        button, input, select { font: inherit; color: inherit; }
+        .hidden { display: none !important; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- Header / top bar: rule draws in on load --- */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background: var(--bg);
+        }
+        .topbar::after {
             content: "";
             position: absolute;
-            top: -6px;
             left: 0;
-            right: 0;
-            height: 6px;
-            background: radial-gradient(circle, transparent, transparent 50%, #fdfbf7 50%, #fdfbf7 100%) -7px -6px / 14px 14px repeat-x;
+            bottom: -2px;
+            width: 0;
+            height: 2px;
+            background: var(--black);
+            transition: var(--transition-structure);
+            transition-delay: 0.2s;
         }
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+        .topbar.loaded::after { width: 100%; }
+        .topbar-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.4rem 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.6rem;
         }
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
+        .brand { display: flex; align-items: center; gap: 1.4rem; min-width: 0; }
+        .logo {
+            width: 4.8rem;
+            height: 4.8rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--black);
+            color: var(--bg);
         }
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 4px;
+        .brand-title { font-size: clamp(2.2rem, 2.4vw, 3rem); }
+        .tagline { font-size: 12px; color: var(--grey); margin-top: 0.4rem; }
+        .title-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.6rem;
+            border: 2px solid var(--black);
+            background: var(--white);
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
+        .chip-high { background: var(--burnt-orange); }
+        .chip-medium { background: var(--amber); }
+        .chip-low { background: var(--sage); }
+        .chip-ok { background: var(--teal); }
+        .chip-accent { background: var(--cream); }
+
+        .controls { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .seg { display: flex; border: 2px solid var(--black); background: var(--white); }
+        .seg-btn {
+            padding: 1rem 1.4rem;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12px;
+            line-height: 1;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            transition: var(--transition-interaction);
+        }
+        .seg-btn + .seg-btn { border-left: 2px solid var(--black); }
+        .seg-btn:hover:not(.active) { background: var(--amber); }
+        .seg-btn.active { background: var(--black); color: var(--bg); }
+
+        /* --- Buttons: black fill, burnt-orange wipe on hover --- */
+        .btn {
+            position: relative;
+            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.8rem;
+            padding: 1.1rem 1.6rem;
+            border: 2px solid var(--black);
+            background: var(--black);
+            color: var(--bg);
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12px;
+            line-height: 1;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            transition: color 0.3s ease;
+        }
+        .btn::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 100%;
+            background: var(--burnt-orange);
+            transition: var(--transition-interaction);
+        }
+        .btn > * { position: relative; z-index: 1; }
+        .btn:hover::before { width: 100%; }
+        .btn:hover { color: var(--cream); }
+        .btn-ghost { background: var(--white); color: var(--black); }
+        .btn-ghost:hover { color: var(--black); }
+
+        .text-link {
+            position: relative;
+            padding: 0 0 0.4rem;
+            border: 0;
+            background: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.1rem;
+            text-transform: uppercase;
+        }
+        .text-link::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--amber);
+            transition: var(--transition-interaction);
+        }
+        .text-link:hover::before { background: var(--black); }
+
+        .icon-btn {
+            padding: 0.4rem;
+            border: 2px solid transparent;
+            background: transparent;
+            cursor: pointer;
+            display: inline-flex;
+        }
+        .icon-btn:hover { border-color: var(--black); background: var(--amber); }
+
+        /* --- Main layout --- */
+        .main {
+            flex: 1;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2.4rem 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2.4rem;
+        }
+        .stack { display: flex; flex-direction: column; gap: 2.4rem; min-width: 0; }
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+            gap: 2.4rem;
+            align-items: start;
+        }
+        @media (max-width: 1023px) {
+            .workspace { grid-template-columns: 1fr; }
+        }
+
+        /* --- Panels: full 2px frame --- */
+        .panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.6rem;
+            min-width: 0;
+            padding: var(--pad-section);
+            background: var(--white);
+            border: var(--rule);
+        }
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding-bottom: 1.2rem;
+            border-bottom: var(--rule);
+        }
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            font-size: clamp(2rem, 2vw, 2.6rem);
+        }
+        .muted { font-size: 12px; color: var(--grey); }
+        .section-label {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.8rem;
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        /* --- KPI row: 2px rules on the grid lines, not around each card --- */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            border-top: var(--rule);
+            border-left: var(--rule);
+        }
+        .kpi {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1.4rem;
+            min-width: 0;
+            padding: 2rem 2.2rem;
+            background: var(--white);
+            border-right: var(--rule);
+            border-bottom: var(--rule);
+        }
+        .kpi-label {
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .kpi-value {
+            margin-top: 0.8rem;
+            font-family: var(--abolition-font);
+            font-size: clamp(3rem, 3vw, 4.2rem);
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .kpi-sub { margin-top: 0.8rem; font-size: 12px; color: var(--grey); }
+        .kpi-icon {
+            width: 4.8rem;
+            height: 4.8rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .kpi-icon.amber { background: var(--amber); }
+        .kpi-icon.teal { background: var(--teal); }
+        .kpi-icon.cream { background: var(--cream); }
+
+        /* --- Inputs --- */
+        .input, .select, .field {
+            border: var(--rule);
+            background: var(--white);
+            color: var(--black);
+            border-radius: 0;
+        }
+        .input { padding: 0.6rem 0.8rem; font-size: 13px; }
+        .input:focus, .select:focus, .field:focus, .cell-input:focus { outline: 3px solid var(--amber); outline-offset: 0; }
+        .select { padding: 0.5rem 0.8rem; font-size: 12px; cursor: pointer; }
+        .mono { font-family: monospace; font-size: 12px; }
+
+        /* --- Ollama bridge --- */
+        .ollama-row {
+            display: flex;
+            flex-direction: column;
+            gap: 1.6rem;
+        }
+        @media (min-width: 768px) {
+            .ollama-row { flex-direction: row; align-items: center; justify-content: space-between; }
+        }
+        .ollama-inputs { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+
+        /* --- Upload --- */
+        .dropzone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2.4rem 2rem;
+            text-align: center;
+            cursor: pointer;
+            border: 2px dashed var(--black);
+            background: var(--bg);
+            transition: var(--transition-interaction);
+        }
+        .dropzone:hover { background: var(--amber); }
+        .dropzone-icon {
+            width: 4.4rem;
+            height: 4.4rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: var(--rule);
+            background: var(--white);
+        }
+        .dropzone-title { font-size: 14px; font-weight: 700; }
+        .dropzone-sub { font-size: 12px; color: var(--grey); margin-top: 0.4rem; }
+        .dropzone:hover .dropzone-sub { color: var(--black); }
+
+        .progress {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            padding: 1.4rem;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .progress-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .progress-row > span:first-child { display: flex; align-items: center; gap: 0.6rem; }
+        .progress-track { height: 14px; border: var(--rule); background: var(--white); }
+        .progress-bar { height: 100%; width: 0; background: var(--burnt-orange); transition: width 0.2s ease; }
+
+        /* --- Samples --- */
+        .samples {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            padding-top: 1.6rem;
+            border-top: var(--rule);
+        }
+        .samples-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+        .sample-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            border-top: var(--rule);
+            border-left: var(--rule);
+        }
+        .sample-btn {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            min-width: 0;
+            padding: 1.2rem;
+            text-align: left;
+            cursor: pointer;
+            background: var(--white);
+            border: 0;
+            border-right: var(--rule);
+            border-bottom: var(--rule);
+            transition: var(--transition-interaction);
+        }
+        .sample-btn:hover { background: var(--amber); }
+        .sample-top { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+        .sample-name { font-size: 14px; font-weight: 700; }
+        .sample-desc { font-size: 12px; color: var(--grey); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sample-btn:hover .sample-desc { color: var(--black); }
+
+        /* --- Receipt queue --- */
+        .queue {
+            display: flex;
+            flex-direction: column;
+            max-height: 460px;
+            overflow-y: auto;
+            border-top: var(--rule);
+            border-left: var(--rule);
+            border-right: var(--rule);
+        }
+        .receipt-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.2rem;
+            padding: 1.2rem;
+            background: var(--white);
+            border-bottom: var(--rule);
+            cursor: pointer;
+            transition: var(--transition-interaction);
+        }
+        .receipt-row:hover { background: var(--cream); }
+        .receipt-row.selected { background: var(--amber); }
+        .receipt-main { display: flex; align-items: center; gap: 1.2rem; min-width: 0; }
+        .receipt-thumb {
+            width: 4rem;
+            height: 5.2rem;
+            flex-shrink: 0;
+            object-fit: cover;
+            border: var(--rule);
+            background: var(--white);
+        }
+        .receipt-name {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .receipt-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-top: 0.3rem;
+            font-size: 12px;
+            color: var(--grey);
+            min-width: 0;
+        }
+        .receipt-row.selected .receipt-meta { color: var(--black); }
+        .receipt-side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; flex-shrink: 0; }
+        .amount {
+            font-family: var(--abolition-font);
+            font-size: 2rem;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .empty {
+            padding: 2.4rem;
+            text-align: center;
+            font-size: 13px;
+            border: 2px dashed var(--black);
+        }
+
+        /* --- Inspector --- */
+        .inspector {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 2rem;
+            min-height: 640px;
+            padding: var(--pad-section);
+            background: var(--white);
+            border: var(--rule);
+        }
+        .inspector-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 2rem;
+            text-align: center;
+        }
+        .inspector-empty .dropzone-icon { width: 5.6rem; height: 5.6rem; }
+        .inspector-empty p { max-width: 42ch; font-size: 13px; color: var(--grey); }
+        .inspector-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1.6rem;
+            padding-bottom: 1.6rem;
+            border-bottom: var(--rule);
+        }
+        .inspector-title {
+            margin: 0.6rem 0 0.4rem;
+            font-size: clamp(3rem, 3.2vw, 4.4rem);
+        }
+        .meta-line { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; font-size: 12px; }
+        .audit-list { display: flex; flex-direction: column; border: var(--rule); }
+        .audit-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1.2rem;
+            padding: 1.2rem 1.4rem;
+            font-size: 13px;
+            border-bottom: var(--rule);
+        }
+        .audit-item:last-child { border-bottom: 0; }
+        .audit-item.high { background: var(--burnt-orange); }
+        .audit-item.medium { background: var(--amber); }
+        .audit-item.low { background: var(--sage); }
+        .audit-item.ok { background: var(--teal); }
+        .audit-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.8rem; font-weight: 700; }
+        .audit-code {
+            padding: 0.1rem 0.4rem;
+            border: var(--rule);
+            background: var(--white);
+            font-family: monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+        .audit-detail { margin-top: 0.3rem; line-height: 1.5; }
+
+        .split {
+            display: grid;
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+            gap: 2rem;
+            padding-top: 0.4rem;
+        }
+        @media (max-width: 768px) {
+            .split { grid-template-columns: 1fr; }
+        }
+        .receipt-visual {
+            display: flex;
+            justify-content: center;
+            padding: 1.2rem;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .receipt-visual img { max-height: 288px; width: auto; object-fit: contain; }
+        .raw-ocr {
+            margin-top: 1.2rem;
+            padding: 1.2rem;
+            border: var(--rule);
+            background: var(--bg);
+            font-size: 12px;
+        }
+        .raw-ocr summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .raw-ocr pre {
+            max-height: 160px;
+            overflow: auto;
+            margin: 1rem 0 0;
+            padding-top: 1rem;
+            border-top: var(--rule);
+            font-family: monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+        }
+        .items-panel {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1.6rem;
+            padding: 1.6rem;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .table-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            padding-bottom: 0.6rem;
+            border-bottom: var(--rule);
+            font-family: var(--nueue-font);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-align: left;
+            text-transform: uppercase;
+        }
+        td { padding: 0.4rem 0; border-bottom: var(--rule); font-size: 13px; vertical-align: middle; }
+        th.num, td.num { text-align: right; }
+        .cell-input {
+            width: 100%;
+            padding: 0.3rem 0.5rem;
+            border: 2px solid transparent;
+            background: transparent;
+            color: var(--black);
+            font-size: 13px;
+        }
+        .cell-input:focus { border-color: var(--black); background: var(--white); }
+        .cell-input.num { width: 8rem; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+        .totals {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            padding-top: 1.2rem;
+            border-top: var(--rule);
+            font-size: 13px;
+        }
+        .total-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+        .field {
+            width: 11rem;
+            padding: 0.4rem 0.6rem;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .total-row.grand {
+            padding-top: 0.8rem;
+            border-top: var(--rule);
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .field.grand { width: 12rem; font-weight: 700; font-size: 15px; background: var(--amber); }
+
+        /* --- Modal --- */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.6rem;
+            background: rgba(0, 0, 0, 0.6);
+        }
+        .modal {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 820px;
+            max-height: 85vh;
+            overflow: hidden;
+            background: var(--bg);
+            border: var(--rule);
+        }
+        .modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.6rem 2rem;
+            background: var(--white);
+            border-bottom: var(--rule);
+        }
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 1.6rem;
+            padding: 2rem;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .note {
+            padding: 1.4rem;
+            border: var(--rule);
+            background: var(--white);
+        }
+        .note-title { font-weight: 700; margin-bottom: 0.6rem; }
+        .code-block {
+            margin: 0;
+            padding: 1.4rem;
+            overflow-x: auto;
+            border: var(--rule);
+            background: var(--white);
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: pre;
+        }
+
+        /* --- Scrollbars: square, rule-coloured --- */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg); border-left: var(--rule); }
+        ::-webkit-scrollbar-thumb { background: var(--black); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--burnt-orange); }
+
+        @media (max-width: 1023px) {
+            .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .kpi-grid { grid-template-columns: 1fr; }
+            .sample-grid { grid-template-columns: 1fr; }
+            .main { padding: 1.6rem; }
+        }
+
+        /* --- Reduced motion: the source site ships none; this restores end states --- */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition-duration: 1ms !important;
+                transition-delay: 0ms !important;
+            }
+            .topbar::after { width: 100%; }
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-white">
+<body>
 
-    <!-- Top Header -->
-    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-900/40">
-                    <i data-lucide="archive" class="w-5 h-5 text-white"></i>
+    <!-- Top Bar -->
+    <header class="topbar" id="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="logo">
+                    <i data-lucide="archive" style="width:20px;height:20px"></i>
                 </div>
                 <div>
-                    <div class="flex items-center gap-2">
-                        <h1 class="font-bold text-lg tracking-tight text-white">Shoebox Receipts Analyzer</h1>
-                        <span class="px-2 py-0.5 text-[11px] font-mono font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <div class="title-row">
+                        <h1 class="brand-title">Shoebox Receipts Analyzer</h1>
+                        <span class="chip chip-ok">
+                            <i data-lucide="shield-check" style="width:12px;height:12px"></i>
                             100% Local Engine
                         </span>
                     </div>
-                    <p class="text-xs text-slate-400 hidden sm:block">Zero Cloud APIs • Client-Side WASM OCR + Local Ollama Vision Support</p>
+                    <p class="tagline">Zero Cloud APIs • Client-Side WASM OCR + Local Ollama Vision Support</p>
                 </div>
             </div>
 
             <!-- Engine Selector & Actions -->
-            <div class="flex items-center gap-2 sm:gap-3">
-                <div class="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center text-xs">
-                    <button id="btnModeWasm" onclick="setEngineMode('wasm')" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-emerald-600 text-white shadow">
+            <div class="controls">
+                <div class="seg">
+                    <button id="btnModeWasm" onclick="setEngineMode('wasm')" class="seg-btn active">
                         Browser OCR + Rules
                     </button>
-                    <button id="btnModeOllama" onclick="setEngineMode('ollama')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white">
+                    <button id="btnModeOllama" onclick="setEngineMode('ollama')" class="seg-btn">
                         Local Ollama VLM
                     </button>
                 </div>
 
-                <button onclick="togglePythonModal()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors" title="Get Standalone Local Python Code">
-                    <i data-lucide="terminal" class="w-4 h-4 text-emerald-400"></i>
-                    <span class="hidden md:inline">Python Local Setup</span>
+                <button onclick="togglePythonModal()" class="btn btn-ghost" title="Get Standalone Local Python Code">
+                    <i data-lucide="terminal" style="width:16px;height:16px"></i>
+                    <span>Python Local Setup</span>
                 </button>
             </div>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <main class="main">
 
-        <!-- Local Engine Config Banner (Shown when Ollama mode is active) -->
-        <div id="ollamaConfigPanel" class="hidden bg-slate-900 border border-indigo-500/30 rounded-2xl p-4 shadow-lg">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div class="flex items-start gap-3">
-                    <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mt-0.5">
-                        <i data-lucide="cpu" class="w-5 h-5"></i>
+        <!-- Local Engine Config Panel (Shown when Ollama mode is active) -->
+        <div id="ollamaConfigPanel" class="panel hidden">
+            <div class="ollama-row">
+                <div style="display:flex;align-items:flex-start;gap:1.2rem">
+                    <div class="kpi-icon cream" style="width:4.4rem;height:4.4rem">
+                        <i data-lucide="cpu" style="width:20px;height:20px"></i>
                     </div>
                     <div>
-                        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <h3 class="panel-title" style="font-family:var(--abolition-font);font-size:clamp(2rem,2vw,2.4rem);flex-wrap:wrap">
                             Local Ollama Vision LLM Bridge
-                            <span id="ollamaStatusBadge" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">Not Checked</span>
+                            <span id="ollamaStatusBadge" class="chip">Not Checked</span>
                         </h3>
-                        <p class="text-xs text-slate-400 mt-0.5">
-                            Connects directly to your machine's local Ollama server (<code class="text-indigo-300">OLLAMA_ORIGINS=* ollama serve</code>). No data leaves your computer.
+                        <p class="muted" style="margin-top:0.4rem">
+                            Connects directly to your machine's local Ollama server (<code class="mono">OLLAMA_ORIGINS=* ollama serve</code>). No data leaves your computer.
                         </p>
                     </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <input id="ollamaUrl" type="text" value="http://localhost:11434" placeholder="http://localhost:11434" class="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 w-44">
-                    <input id="ollamaModel" type="text" value="llama3.2-vision" placeholder="llama3.2-vision" class="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 w-36">
-                    <button onclick="testOllamaConnection()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors flex items-center gap-1">
-                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Ping Localhost
+                <div class="ollama-inputs">
+                    <input id="ollamaUrl" type="text" value="http://localhost:11434" placeholder="http://localhost:11434" class="input mono" style="width:11rem">
+                    <input id="ollamaModel" type="text" value="llama3.2-vision" placeholder="llama3.2-vision" class="input mono" style="width:9rem">
+                    <button onclick="testOllamaConnection()" class="btn">
+                        <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Ping Localhost
                     </button>
                 </div>
             </div>
         </div>
 
         <!-- KPI Summary Row -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+        <div class="kpi-grid">
+            <div class="kpi">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Receipts in Shoebox</p>
-                    <p id="statCount" class="text-2xl font-bold text-white mt-1 font-mono">0</p>
-                    <p class="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
-                        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Processed in local memory
-                    </p>
+                    <p class="kpi-label">Receipts in Shoebox</p>
+                    <p id="statCount" class="kpi-value">0</p>
+                    <p class="kpi-sub">Processed in local memory</p>
                 </div>
-                <div class="w-12 h-12 rounded-2xl bg-slate-800/80 flex items-center justify-center text-slate-300">
-                    <i data-lucide="receipt" class="w-6 h-6"></i>
+                <div class="kpi-icon">
+                    <i data-lucide="receipt" style="width:22px;height:22px"></i>
                 </div>
             </div>
 
-            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+            <div class="kpi">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Extracted Spend</p>
-                    <p id="statTotal" class="text-2xl font-bold text-white mt-1 font-mono">$0.00</p>
-                    <p id="statTaxSub" class="text-[11px] text-slate-400 mt-1 font-mono">Tax: $0.00 • Tips: $0.00</p>
+                    <p class="kpi-label">Total Extracted Spend</p>
+                    <p id="statTotal" class="kpi-value">$0.00</p>
+                    <p id="statTaxSub" class="kpi-sub">Tax: $0.00 • Tips: $0.00</p>
                 </div>
-                <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                    <i data-lucide="dollar-sign" class="w-6 h-6"></i>
+                <div class="kpi-icon teal">
+                    <i data-lucide="dollar-sign" style="width:22px;height:22px"></i>
                 </div>
             </div>
 
-            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+            <div class="kpi">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Anomalies Flagged</p>
-                    <p id="statAnomalies" class="text-2xl font-bold text-amber-400 mt-1 font-mono">0</p>
-                    <p id="statAnomalySub" class="text-[11px] text-slate-400 mt-1">Math errors, tips & duplicates</p>
+                    <p class="kpi-label">Anomalies Flagged</p>
+                    <p id="statAnomalies" class="kpi-value">0</p>
+                    <p id="statAnomalySub" class="kpi-sub">Math errors, tips & duplicates</p>
                 </div>
-                <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                <div class="kpi-icon amber">
+                    <i data-lucide="alert-triangle" style="width:22px;height:22px"></i>
                 </div>
             </div>
 
-            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+            <div class="kpi">
                 <div>
-                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Top Spend Category</p>
-                    <p id="statTopCategory" class="text-lg font-bold text-white mt-1 truncate max-w-[160px]">None yet</p>
-                    <button onclick="exportCSV()" class="text-[11px] text-indigo-400 hover:text-indigo-300 mt-1 flex items-center gap-1 font-medium">
-                        <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Audit CSV
+                    <p class="kpi-label">Top Spend Category</p>
+                    <p id="statTopCategory" class="kpi-value" style="font-size:clamp(2rem,2vw,2.6rem);overflow-wrap:anywhere">None yet</p>
+                    <button onclick="exportCSV()" class="text-link" style="margin-top:0.6rem">
+                        Export Audit CSV
                     </button>
                 </div>
-                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-                    <i data-lucide="pie-chart" class="w-6 h-6"></i>
+                <div class="kpi-icon cream">
+                    <i data-lucide="pie-chart" style="width:22px;height:22px"></i>
                 </div>
             </div>
         </div>
 
-        <!-- Main 12-Column Workspace -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
-            <!-- Left Column: Uploader + Sample Shoebox + Receipt Queue (5 cols) -->
-            <div class="lg:col-span-5 space-y-5">
-                
-                <!-- Upload & Synthetic Test Receipt Generator Card -->
-                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                            <i data-lucide="scan-line" class="w-4 h-4 text-emerald-400"></i>
+        <!-- Main Workspace -->
+        <div class="workspace">
+
+            <!-- Left Column: Uploader + Sample Shoebox + Receipt Queue -->
+            <div class="stack">
+
+                <!-- Upload & Sample Receipt Card -->
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2 class="panel-title">
+                            <i data-lucide="scan-line" style="width:20px;height:20px"></i>
                             Add Receipt to Local Shoebox
                         </h2>
-                        <span class="text-[11px] text-slate-400">PNG, JPG, WEBP</span>
+                        <span class="muted">PNG, JPG, WEBP</span>
                     </div>
 
                     <!-- Dropzone -->
-                    <label for="receiptFileInput" id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-emerald-500/60 bg-slate-950/60 hover:bg-slate-950 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all group">
-                        <div class="w-10 h-10 rounded-full bg-slate-800 group-hover:bg-emerald-500/20 text-slate-400 group-hover:text-emerald-400 flex items-center justify-center mb-2 transition-colors">
-                            <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+                    <label for="receiptFileInput" id="dropZone" class="dropzone">
+                        <div class="dropzone-icon">
+                            <i data-lucide="upload-cloud" style="width:20px;height:20px"></i>
                         </div>
-                        <p class="text-xs font-medium text-slate-200">Click to upload receipt photo or drag & drop</p>
-                        <p class="text-[11px] text-slate-500 mt-1">Processed locally via WebAssembly OCR or Local Ollama</p>
+                        <p class="dropzone-title">Click to upload receipt photo or drag &amp; drop</p>
+                        <p class="dropzone-sub">Processed locally via WebAssembly OCR or Local Ollama</p>
                         <input id="receiptFileInput" type="file" accept="image/*" multiple class="hidden" onchange="handleFileUpload(event)">
                     </label>
 
                     <!-- Progress Indicator (Hidden by default) -->
-                    <div id="ocrProgressBox" class="hidden bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
-                        <div class="flex items-center justify-between text-xs">
-                            <span id="ocrProgressStatus" class="text-emerald-400 font-medium flex items-center gap-1.5">
-                                <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                    <div id="ocrProgressBox" class="progress hidden">
+                        <div class="progress-row">
+                            <span id="ocrProgressStatus">
+                                <i data-lucide="loader-2" class="spin" style="width:14px;height:14px"></i>
                                 Running Local Tesseract WASM...
                             </span>
-                            <span id="ocrProgressPct" class="font-mono text-slate-400">0%</span>
+                            <span id="ocrProgressPct" class="mono">0%</span>
                         </div>
-                        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div id="ocrProgressBar" class="h-full bg-emerald-500 transition-all duration-200" style="width: 0%"></div>
+                        <div class="progress-track">
+                            <div id="ocrProgressBar" class="progress-bar" style="width: 0%"></div>
                         </div>
                     </div>
 
-                    <!-- Instant Sample Receipt Presets (Generates crisp canvas images & runs them through the local analyzer) -->
-                    <div class="pt-2 border-t border-slate-800/80">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Or Generate & Scan Sample Receipts:</span>
-                            <button onclick="loadAllSamples()" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium">
+                    <!-- Sample Receipt Presets -->
+                    <div class="samples">
+                        <div class="samples-head">
+                            <span class="section-label" style="margin:0">Or Generate &amp; Scan Sample Receipts</span>
+                            <button onclick="loadAllSamples()" class="text-link">
                                 + Load Full Shoebox (4)
                             </button>
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button onclick="scanGeneratedSample('bistro')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">Bistro 42 Dinner</span>
-                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">Math + Tip</span>
+                        <div class="sample-grid">
+                            <button onclick="scanGeneratedSample('bistro')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">Bistro 42 Dinner</span>
+                                    <span class="chip chip-medium">Math + Tip</span>
                                 </div>
-                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">28% tip + $10 total overcharge</p>
+                                <p class="sample-desc">28% tip + $10 total overcharge</p>
                             </button>
 
-                            <button onclick="scanGeneratedSample('hardware')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">Apex Office Depot</span>
-                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">Duplicate</span>
+                            <button onclick="scanGeneratedSample('hardware')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">Apex Office Depot</span>
+                                    <span class="chip chip-high">Duplicate</span>
                                 </div>
-                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">Double-scanned item + Personal item</p>
+                                <p class="sample-desc">Double-scanned item + Personal item</p>
                             </button>
 
-                            <button onclick="scanGeneratedSample('cloud')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">Metro Taxi & Fuel</span>
-                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">Weekend</span>
+                            <button onclick="scanGeneratedSample('cloud')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">Metro Taxi &amp; Fuel</span>
+                                    <span class="chip chip-medium">Weekend</span>
                                 </div>
-                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">Sunday receipt + tax rate spike</p>
+                                <p class="sample-desc">Sunday receipt + tax rate spike</p>
                             </button>
 
-                            <button onclick="scanGeneratedSample('clean')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">GreenLeaf Market</span>
-                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">Clean</span>
+                            <button onclick="scanGeneratedSample('clean')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">GreenLeaf Market</span>
+                                    <span class="chip chip-ok">Clean</span>
                                 </div>
-                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">Verified math & compliant spend</p>
+                                <p class="sample-desc">Verified math &amp; compliant spend</p>
                             </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Receipt Shoebox Queue List -->
-                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <h2 class="text-sm font-semibold text-white flex items-center gap-2">
-                            <i data-lucide="layers" class="w-4 h-4 text-indigo-400"></i>
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2 class="panel-title">
+                            <i data-lucide="layers" style="width:20px;height:20px"></i>
                             Scanned Shoebox Queue
                         </h2>
-                        <div class="flex items-center gap-2">
-                            <select id="filterAnomalySelect" onchange="renderReceiptList()" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none">
-                                <option value="all">All Receipts</option>
-                                <option value="flagged">Flagged Only</option>
-                                <option value="clean">Verified Clean</option>
-                            </select>
-                        </div>
+                        <select id="filterAnomalySelect" onchange="renderReceiptList()" class="select">
+                            <option value="all">All Receipts</option>
+                            <option value="flagged">Flagged Only</option>
+                            <option value="clean">Verified Clean</option>
+                        </select>
                     </div>
 
-                    <div id="receiptListContainer" class="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                    <div id="receiptListContainer" class="queue">
                         <!-- Dynamically populated -->
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Interactive Inspector & Anomaly Auditor (7 cols) -->
-            <div class="lg:col-span-7 space-y-5">
-                <div id="inspectorContainer" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 min-h-[640px] flex flex-col justify-between">
+            <!-- Right Column: Interactive Inspector & Anomaly Auditor -->
+            <div class="stack">
+                <div id="inspectorContainer" class="inspector">
                     <!-- Populated dynamically when a receipt is selected -->
                 </div>
             </div>
@@ -306,53 +983,51 @@
         </div>
     </main>
 
-    <!-- Hidden Canvas for Generating Realistic Sample Receipt Photos for Real OCR Testing -->
+    <!-- Hidden Canvas for Generating Sample Receipt Photos for OCR Testing -->
     <canvas id="sampleReceiptCanvas" width="420" height="620" class="hidden"></canvas>
 
     <!-- Standalone Local Python Code Modal -->
-    <div id="pythonModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
-                <div class="flex items-center gap-2.5">
-                    <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <i data-lucide="terminal" class="w-5 h-5"></i>
+    <div id="pythonModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <div class="modal-head">
+                <div style="display:flex;align-items:center;gap:1.2rem">
+                    <div class="kpi-icon teal" style="width:4.4rem;height:4.4rem">
+                        <i data-lucide="terminal" style="width:20px;height:20px"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-white text-base">Run Standalone Local Python Version (Zero Cloud API)</h3>
-                        <p class="text-xs text-slate-400">Replace Gemini 4 Argon with local Ollama (`llama3.2-vision` or `qwen2.5-vl`) + Streamlit</p>
+                        <h3 style="font-family:var(--abolition-font);font-size:2rem;font-weight:400;text-transform:uppercase;letter-spacing:0">Run Standalone Local Python Version (Zero Cloud API)</h3>
+                        <p class="muted" style="margin-top:0.3rem">Replace Gemini 4 Argon with local Ollama (`llama3.2-vision` or `qwen2.5-vl`) + Streamlit</p>
                     </div>
                 </div>
-                <button onclick="togglePythonModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
-                    <i data-lucide="x" class="w-5 h-5"></i>
+                <button onclick="togglePythonModal()" class="icon-btn" aria-label="Close">
+                    <i data-lucide="x" style="width:20px;height:20px"></i>
                 </button>
             </div>
 
-            <div class="p-5 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed">
-                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2">
-                    <p class="font-semibold text-emerald-400">Why the original needed an API—and how we replace it locally:</p>
-                    <p class="text-slate-400">
+            <div class="modal-body">
+                <div class="note">
+                    <p class="note-title">Why the original needed an API—and how we replace it locally:</p>
+                    <p class="muted">
                         The cloud showcase version sends receipt images to Google's servers for multimodal JSON extraction. To run 100% offline on consumer hardware (Mac M-Series, NVIDIA GPU, or modern CPU), you can either use **this web app directly** (which runs Tesseract WASM + Local Rules or connects to local Ollama), or run the standalone Python script below.
                     </p>
                 </div>
 
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="font-semibold text-white">1. Install Local Ollama Vision Model (Terminal)</span>
-                    </div>
-                    <pre class="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-emerald-300 overflow-x-auto"># Install Ollama from https://ollama.com, then pull a local vision model:
+                <div>
+                    <p class="section-label">1. Install Local Ollama Vision Model (Terminal)</p>
+                    <pre class="code-block"># Install Ollama from https://ollama.com, then pull a local vision model:
 ollama pull llama3.2-vision
 # Allow browser/local connections and start server:
 OLLAMA_ORIGINS=* ollama serve</pre>
                 </div>
 
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="font-semibold text-white">2. Standalone Python Script (`local_shoebox_analyzer.py`)</span>
-                        <button onclick="copyPythonCode()" id="copyBtnText" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-medium flex items-center gap-1">
-                            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Python Script
+                <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.8rem;flex-wrap:wrap">
+                        <p class="section-label" style="margin:0">2. Standalone Python Script (`local_shoebox_analyzer.py`)</p>
+                        <button onclick="copyPythonCode()" id="copyBtnText" class="btn btn-ghost">
+                            <i data-lucide="copy" style="width:14px;height:14px"></i> Copy Python Script
                         </button>
                     </div>
-                    <pre id="pythonCodeBlock" class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 font-mono text-[11px] text-slate-200 overflow-x-auto leading-normal">import base64
+                    <pre id="pythonCodeBlock" class="code-block">import base64
 import json
 import requests
 import streamlit as st
@@ -673,10 +1348,10 @@ if uploaded and st.button("Analyze Locally"):
             ctx.textAlign = 'center';
 
             // Header
-            ctx.font = 'bold 22px "JetBrains Mono", monospace';
+            ctx.font = 'bold 22px monospace';
             ctx.fillText(template.merchant, canvas.width / 2, 48);
 
-            ctx.font = '13px "JetBrains Mono", monospace';
+            ctx.font = '13px monospace';
             ctx.fillText(template.address, canvas.width / 2, 72);
             ctx.fillText(`DATE: ${template.date}   TIME: ${template.time}`, canvas.width / 2, 96);
 
@@ -686,7 +1361,7 @@ if uploaded and st.button("Analyze Locally"):
 
             // Line items
             let y = 154;
-            ctx.font = '15px "JetBrains Mono", monospace';
+            ctx.font = '15px monospace';
             template.items.forEach(item => {
                 ctx.textAlign = 'left';
                 ctx.fillText(`${item.name}`, 28, y);
@@ -701,7 +1376,7 @@ if uploaded and st.button("Analyze Locally"):
 
             // Totals section
             const drawRow = (label, val, bold = false) => {
-                ctx.font = bold ? 'bold 17px "JetBrains Mono", monospace' : '15px "JetBrains Mono", monospace';
+                ctx.font = bold ? 'bold 17px monospace' : '15px monospace';
                 ctx.textAlign = 'left';
                 ctx.fillText(label, 28, y);
                 ctx.textAlign = 'right';
@@ -716,7 +1391,7 @@ if uploaded and st.button("Analyze Locally"):
             drawRow('TOTAL', template.total, true);
 
             y += 12;
-            ctx.font = '12px "JetBrains Mono", monospace';
+            ctx.font = '12px monospace';
             ctx.textAlign = 'center';
             ctx.fillText(`PAID VIA ${template.paymentMethod} - CUSTOMER COPY`, canvas.width / 2, y);
 
@@ -728,7 +1403,7 @@ if uploaded and st.button("Analyze Locally"):
          */
         function parseRawOcrTextToReceipt(rawText, fallbackFileName = 'Uploaded Receipt') {
             const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-            
+
             let merchant = fallbackFileName.replace(/\.[^/.]+$/, "");
             let date = new Date().toISOString().slice(0, 10);
             const items = [];
@@ -816,7 +1491,7 @@ if uploaded and st.button("Analyze Locally"):
                 let usedEngineLabel = 'Browser WASM OCR + Local Rules';
 
                 if (engineMode === 'ollama') {
-                    progressStatus.innerHTML = `<i data-lucide="cpu" class="w-3.5 h-3.5 animate-spin"></i> Querying Local Ollama Vision Model...`;
+                    progressStatus.innerHTML = `<i data-lucide="cpu" class="spin" style="width:14px;height:14px"></i> Querying Local Ollama Vision Model...`;
                     lucide.createIcons();
                     progressBar.style.width = '40%';
                     progressPct.textContent = 'Local LLM';
@@ -825,7 +1500,7 @@ if uploaded and st.button("Analyze Locally"):
                     usedEngineLabel = `Local Ollama (${document.getElementById('ollamaModel').value})`;
                 } else {
                     // Run 100% Client-Side Tesseract.js WASM OCR
-                    progressStatus.innerHTML = `<i data-lucide="scan-line" class="w-3.5 h-3.5 animate-spin"></i> Running Local WebAssembly OCR...`;
+                    progressStatus.innerHTML = `<i data-lucide="scan-line" class="spin" style="width:14px;height:14px"></i> Running Local WebAssembly OCR...`;
                     lucide.createIcons();
 
                     const result = await Tesseract.recognize(imageDataUrl, 'eng', {
@@ -908,7 +1583,7 @@ if uploaded and st.button("Analyze Locally"):
             const badge = document.getElementById('ollamaStatusBadge');
             const baseUrl = document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
             badge.textContent = 'Checking...';
-            badge.className = 'text-[11px] px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-mono';
+            badge.className = 'chip chip-medium';
 
             try {
                 const res = await fetch(`${baseUrl}/api/tags`);
@@ -916,13 +1591,13 @@ if uploaded and st.button("Analyze Locally"):
                     const data = await res.json();
                     const modelCount = (data.models || []).length;
                     badge.textContent = `Connected (${modelCount} local models)`;
-                    badge.className = 'text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono';
+                    badge.className = 'chip chip-ok';
                 } else {
                     throw new Error('Status ' + res.status);
                 }
             } catch (e) {
                 badge.textContent = 'Offline (Run: OLLAMA_ORIGINS=* ollama serve)';
-                badge.className = 'text-[11px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-mono';
+                badge.className = 'chip chip-high';
             }
         }
 
@@ -933,12 +1608,12 @@ if uploaded and st.button("Analyze Locally"):
             const ollamaPanel = document.getElementById('ollamaConfigPanel');
 
             if (mode === 'wasm') {
-                btnWasm.className = 'px-3 py-1.5 rounded-lg font-medium transition-all bg-emerald-600 text-white shadow';
-                btnOllama.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white';
+                btnWasm.className = 'seg-btn active';
+                btnOllama.className = 'seg-btn';
                 ollamaPanel.classList.add('hidden');
             } else {
-                btnOllama.className = 'px-3 py-1.5 rounded-lg font-medium transition-all bg-indigo-600 text-white shadow';
-                btnWasm.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white';
+                btnOllama.className = 'seg-btn active';
+                btnWasm.className = 'seg-btn';
                 ollamaPanel.classList.remove('hidden');
                 testOllamaConnection();
             }
@@ -988,7 +1663,7 @@ if uploaded and st.button("Analyze Locally"):
         function updateDashboard() {
             // Update KPIs
             document.getElementById('statCount').textContent = receipts.length;
-            
+
             const totalSpend = receipts.reduce((s, r) => s + Number(r.total || 0), 0);
             const totalTax = receipts.reduce((s, r) => s + Number(r.tax || 0), 0);
             const totalTip = receipts.reduce((s, r) => s + Number(r.tip || 0), 0);
@@ -1030,8 +1705,8 @@ if uploaded and st.button("Analyze Locally"):
 
             if (filtered.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center py-8 px-4 border border-dashed border-slate-800 rounded-xl">
-                        <p class="text-xs text-slate-400">No receipts match this filter.</p>
+                    <div class="empty">
+                        <p class="muted">No receipts match this filter.</p>
                     </div>
                 `;
                 return;
@@ -1041,32 +1716,28 @@ if uploaded and st.button("Analyze Locally"):
                 const isSelected = r.id === selectedReceiptId;
                 const anomalyCount = r.anomalies ? r.anomalies.length : 0;
                 const badgeHtml = anomalyCount > 0
-                    ? `<span class="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                         <i data-lucide="alert-triangle" class="w-3 h-3"></i> ${anomalyCount} Flag${anomalyCount > 1 ? 's' : ''}
+                    ? `<span class="chip chip-medium">
+                         <i data-lucide="alert-triangle" style="width:12px;height:12px"></i> ${anomalyCount} Flag${anomalyCount > 1 ? 's' : ''}
                        </span>`
-                    : `<span class="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                         <i data-lucide="check-circle-2" class="w-3 h-3"></i> Verified
+                    : `<span class="chip chip-ok">
+                         <i data-lucide="check-circle-2" style="width:12px;height:12px"></i> Verified
                        </span>`;
 
                 return `
-                    <div onclick="selectReceipt('${r.id}')" class="p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                        isSelected 
-                            ? 'bg-slate-800/90 border-emerald-500/50 shadow-md' 
-                            : 'bg-slate-950/60 border-slate-800/80 hover:bg-slate-800/40'
-                    }">
-                        <div class="flex items-center gap-3 min-w-0">
-                            <img src="${r.imageUrl}" alt="${r.merchant}" class="w-10 h-12 object-cover rounded-lg border border-slate-700 bg-slate-900 shrink-0">
-                            <div class="min-w-0">
-                                <h4 class="text-xs font-bold text-white truncate">${r.merchant}</h4>
-                                <div class="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                                    <span class="font-mono">${r.date}</span>
+                    <div onclick="selectReceipt('${r.id}')" class="receipt-row ${isSelected ? 'selected' : ''}">
+                        <div class="receipt-main">
+                            <img src="${r.imageUrl}" alt="${r.merchant}" class="receipt-thumb">
+                            <div style="min-width:0">
+                                <h4 class="receipt-name">${r.merchant}</h4>
+                                <div class="receipt-meta">
+                                    <span class="mono">${r.date}</span>
                                     <span>•</span>
-                                    <span class="truncate text-indigo-300">${r.category}</span>
+                                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.category}</span>
                                 </div>
                             </div>
                         </div>
-                        <div class="text-right shrink-0 flex flex-col items-end gap-1">
-                            <span class="text-sm font-bold font-mono text-white">$${Number(r.total).toFixed(2)}</span>
+                        <div class="receipt-side">
+                            <span class="amount">$${Number(r.total).toFixed(2)}</span>
                             ${badgeHtml}
                         </div>
                     </div>
@@ -1088,12 +1759,12 @@ if uploaded and st.button("Analyze Locally"):
 
             if (!receipt) {
                 container.innerHTML = `
-                    <div class="flex-1 flex flex-col items-center justify-center text-center p-8">
-                        <div class="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 mb-3">
-                            <i data-lucide="file-search" class="w-7 h-7"></i>
+                    <div class="inspector-empty">
+                        <div class="dropzone-icon" style="width:56px;height:56px">
+                            <i data-lucide="file-search" style="width:26px;height:26px"></i>
                         </div>
-                        <h3 class="text-base font-semibold text-white">No Receipt Selected</h3>
-                        <p class="text-xs text-slate-400 max-w-sm mt-1">
+                        <h3 style="font-family:var(--abolition-font);font-weight:400;font-size:2.4rem;letter-spacing:0;text-transform:uppercase">No Receipt Selected</h3>
+                        <p>
                             Upload a receipt image on the left or click one of the sample receipt generators to watch the local OCR and anomaly engine extract and audit it.
                         </p>
                     </div>
@@ -1102,114 +1773,106 @@ if uploaded and st.button("Analyze Locally"):
             }
 
             const anomaliesHtml = receipt.anomalies && receipt.anomalies.length > 0
-                ? receipt.anomalies.map(a => {
-                    const colorMap = {
-                        high: 'bg-rose-500/10 border-rose-500/30 text-rose-300',
-                        medium: 'bg-amber-500/10 border-amber-500/30 text-amber-300',
-                        low: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300'
-                    };
-                    const badgeClass = colorMap[a.severity] || colorMap.medium;
-                    return `
-                        <div class="p-3 rounded-xl border ${badgeClass} flex items-start gap-3">
-                            <i data-lucide="alert-octagon" class="w-4 h-4 shrink-0 mt-0.5"></i>
-                            <div class="text-xs space-y-0.5">
-                                <div class="font-bold flex items-center gap-2">
+                ? receipt.anomalies.map(a => `
+                        <div class="audit-item ${a.severity}">
+                            <i data-lucide="alert-octagon" style="width:16px;height:16px;flex-shrink:0;margin-top:2px"></i>
+                            <div style="min-width:0">
+                                <div class="audit-title">
                                     <span>${a.title}</span>
-                                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-black/30">${a.code}</span>
+                                    <span class="audit-code">${a.code}</span>
                                 </div>
-                                <p class="opacity-90 leading-relaxed">${a.detail}</p>
+                                <p class="audit-detail">${a.detail}</p>
                             </div>
                         </div>
-                    `;
-                }).join('')
+                    `).join('')
                 : `
-                    <div class="p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 flex items-center gap-3">
-                        <i data-lucide="shield-check" class="w-5 h-5 shrink-0"></i>
-                        <div class="text-xs">
-                            <p class="font-bold">All Local Audit Checks Passed</p>
-                            <p class="opacity-80">Line-item sum matches subtotal, tax & tip are within policy limits, and grand total math is verified.</p>
+                    <div class="audit-item ok">
+                        <i data-lucide="shield-check" style="width:20px;height:20px;flex-shrink:0"></i>
+                        <div>
+                            <p class="audit-title">All Local Audit Checks Passed</p>
+                            <p class="audit-detail">Line-item sum matches subtotal, tax &amp; tip are within policy limits, and grand total math is verified.</p>
                         </div>
                     </div>
                 `;
 
             const itemsRowsHtml = receipt.items.map((item, idx) => `
-                <tr class="border-b border-slate-800/60 text-xs">
-                    <td class="py-2 pr-2">
+                <tr>
+                    <td style="padding-right:0.8rem">
                         <input type="text" value="${item.name}" onchange="updateLineItem('${receipt.id}', ${idx}, 'name', this.value)"
-                            class="w-full bg-transparent text-slate-200 focus:bg-slate-950 focus:outline-none px-1.5 py-1 rounded border border-transparent focus:border-slate-700">
+                            class="cell-input">
                     </td>
-                    <td class="py-2 px-2">
-                        <span class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px]">${item.category || 'General'}</span>
+                    <td style="padding:0 0.8rem">
+                        <span class="chip chip-accent">${item.category || 'General'}</span>
                     </td>
-                    <td class="py-2 pl-2 text-right font-mono">
+                    <td class="num">
                         <input type="number" step="0.01" value="${Number(item.price).toFixed(2)}" onchange="updateLineItem('${receipt.id}', ${idx}, 'price', this.value)"
-                            class="w-20 text-right bg-transparent text-white font-semibold focus:bg-slate-950 focus:outline-none px-1.5 py-1 rounded border border-transparent focus:border-slate-700">
+                            class="cell-input num">
                     </td>
                 </tr>
             `).join('');
 
             container.innerHTML = `
-                <div class="space-y-5">
+                <div style="display:flex;flex-direction:column;gap:2rem">
                     <!-- Top Inspector Header -->
-                    <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div class="inspector-head">
                         <div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                            <div class="meta-line">
+                                <span class="chip chip-accent mono">
                                     ${receipt.engineUsed}
                                 </span>
-                                <span class="text-xs text-slate-400 font-mono">${receipt.date}</span>
+                                <span class="mono muted">${receipt.date}</span>
                             </div>
-                            <h2 class="text-xl font-bold text-white mt-1.5">${receipt.merchant}</h2>
-                            <p class="text-xs text-slate-400">Primary Category: <strong class="text-indigo-300">${receipt.category}</strong></p>
+                            <h2 class="inspector-title">${receipt.merchant}</h2>
+                            <p class="muted">Primary Category: <strong style="color:#000">${receipt.category}</strong></p>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="deleteReceipt('${receipt.id}')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-slate-700 text-xs font-medium transition-colors flex items-center gap-1.5">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove
+                        <div>
+                            <button onclick="deleteReceipt('${receipt.id}')" class="btn btn-ghost">
+                                <i data-lucide="trash-2" style="width:14px;height:14px"></i> Remove
                             </button>
                         </div>
                     </div>
 
                     <!-- Anomaly Audit Report Section -->
-                    <div class="space-y-2">
-                        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                            <i data-lucide="FileWarning" class="w-3.5 h-3.5 text-amber-400"></i>
-                            Local Anomaly & Policy Audit (${receipt.anomalies.length})
+                    <div>
+                        <h3 class="section-label">
+                            <i data-lucide="file-warning" style="width:14px;height:14px"></i>
+                            Local Anomaly &amp; Policy Audit (${receipt.anomalies.length})
                         </h3>
-                        <div class="space-y-2">
+                        <div class="audit-list">
                             ${anomaliesHtml}
                         </div>
                     </div>
 
                     <!-- Split View: Receipt Image Preview + Editable Extracted Table -->
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-5 pt-2">
-                        <!-- Receipt Visual & Raw OCR Toggle (5 cols) -->
-                        <div class="md:col-span-5 space-y-3">
-                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-2 flex flex-col items-center">
-                                <img src="${receipt.imageUrl}" alt="Receipt Image" class="max-h-72 w-auto rounded-lg object-contain">
+                    <div class="split">
+                        <!-- Receipt Visual & Raw OCR Toggle -->
+                        <div>
+                            <div class="receipt-visual">
+                                <img src="${receipt.imageUrl}" alt="Receipt Image" style="max-height:288px;width:auto;object-fit:contain">
                             </div>
-                            <details class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs">
-                                <summary class="cursor-pointer font-medium text-slate-300 flex items-center justify-between">
+                            <details class="raw-ocr">
+                                <summary>
                                     <span>View Raw Local OCR Output</span>
-                                    <i data-lucide="code" class="w-3.5 h-3.5 text-slate-400"></i>
+                                    <i data-lucide="code" style="width:14px;height:14px"></i>
                                 </summary>
-                                <pre class="mt-2 pt-2 border-t border-slate-800 font-mono text-[10px] text-slate-400 whitespace-pre-wrap overflow-x-auto max-h-40">${receipt.rawOcrText || 'No raw text available'}</pre>
+                                <pre>${receipt.rawOcrText || 'No raw text available'}</pre>
                             </details>
                         </div>
 
-                        <!-- Extracted Line Items & Interactive Math Auditor (7 cols) -->
-                        <div class="md:col-span-7 bg-slate-950/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                        <!-- Extracted Line Items & Interactive Math Auditor -->
+                        <div class="items-panel">
                             <div>
-                                <div class="flex items-center justify-between mb-2">
-                                    <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Extracted Line Items (Click to Edit & Re-Audit)</h4>
-                                    <button onclick="addLineItem('${receipt.id}')" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium">+ Add Item</button>
+                                <div class="table-head">
+                                    <h4 class="section-label" style="margin:0">Extracted Line Items (Click to Edit &amp; Re-Audit)</h4>
+                                    <button onclick="addLineItem('${receipt.id}')" class="text-link">+ Add Item</button>
                                 </div>
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left border-collapse">
+                                <div style="overflow-x:auto">
+                                    <table>
                                         <thead>
-                                            <tr class="border-b border-slate-800 text-[11px] text-slate-400 uppercase">
-                                                <th class="pb-1.5">Description</th>
-                                                <th class="pb-1.5 px-2">Category</th>
-                                                <th class="pb-1.5 text-right">Amount</th>
+                                            <tr>
+                                                <th>Description</th>
+                                                <th style="padding-left:0.8rem;padding-right:0.8rem">Category</th>
+                                                <th class="num">Amount</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1220,30 +1883,30 @@ if uploaded and st.button("Analyze Locally"):
                             </div>
 
                             <!-- Totals Breakdown -->
-                            <div class="border-t border-slate-800 pt-3 space-y-2 text-xs">
-                                <div class="flex items-center justify-between text-slate-400">
-                                    <span>Extracted Subtotal:</span>
+                            <div class="totals">
+                                <div class="total-row">
+                                    <span class="muted">Extracted Subtotal:</span>
                                     <input type="number" step="0.01" value="${Number(receipt.subtotal).toFixed(2)}"
                                         onchange="updateReceiptField('${receipt.id}', 'subtotal', this.value)"
-                                        class="w-24 text-right font-mono bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-200">
+                                        class="field">
                                 </div>
-                                <div class="flex items-center justify-between text-slate-400">
-                                    <span>Tax:</span>
+                                <div class="total-row">
+                                    <span class="muted">Tax:</span>
                                     <input type="number" step="0.01" value="${Number(receipt.tax).toFixed(2)}"
                                         onchange="updateReceiptField('${receipt.id}', 'tax', this.value)"
-                                        class="w-24 text-right font-mono bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-200">
+                                        class="field">
                                 </div>
-                                <div class="flex items-center justify-between text-slate-400">
-                                    <span>Tip / Gratuity:</span>
+                                <div class="total-row">
+                                    <span class="muted">Tip / Gratuity:</span>
                                     <input type="number" step="0.01" value="${Number(receipt.tip).toFixed(2)}"
                                         onchange="updateReceiptField('${receipt.id}', 'tip', this.value)"
-                                        class="w-24 text-right font-mono bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-200">
+                                        class="field">
                                 </div>
-                                <div class="flex items-center justify-between font-bold text-sm text-white pt-1 border-t border-slate-800/80">
+                                <div class="total-row grand">
                                     <span>Receipt Printed Total:</span>
                                     <input type="number" step="0.01" value="${Number(receipt.total).toFixed(2)}"
                                         onchange="updateReceiptField('${receipt.id}', 'total', this.value)"
-                                        class="w-28 text-right font-mono bg-slate-900 border border-slate-700 rounded px-2 py-1 text-emerald-400">
+                                        class="field grand">
                                 </div>
                             </div>
                         </div>
@@ -1324,10 +1987,10 @@ if uploaded and st.button("Analyze Locally"):
             document.body.removeChild(tempInput);
 
             const btn = document.getElementById('copyBtnText');
-            btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Copied!`;
+            btn.innerHTML = `<i data-lucide="check" style="width:14px;height:14px"></i> Copied!`;
             lucide.createIcons();
             setTimeout(() => {
-                btn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Python Script`;
+                btn.innerHTML = `<i data-lucide="copy" style="width:14px;height:14px"></i> Copy Python Script`;
                 lucide.createIcons();
             }, 2000);
         }
@@ -1336,6 +1999,7 @@ if uploaded and st.button("Analyze Locally"):
         window.onload = function() {
             loadAllSamples();
             lucide.createIcons();
+            document.getElementById('topbar').classList.add('loaded');
         };
     </script>
 </body>
