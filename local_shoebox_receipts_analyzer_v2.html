@@ -1,0 +1,2802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoebox Receipts Analyzer — QBO White Van &amp; Startup Edition</title>
+    <!-- Typekit: Abolition (display) + Proxima Nova (body) -->
+    <link rel="stylesheet" href="https://use.typekit.net/wqy7ecr.css">
+    <!-- Tesseract.js for 100% Client-Side Local OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* ---------------------------------------------------------------
+         * Design tokens — industrycity.com design system
+         * Neo-brutalist editorial: paper ground, 2px black rules, no radius, no shadow.
+         * ------------------------------------------------------------- */
+        :root {
+            --proxima-font: "proxima-nova", "Helvetica Neue", Arial, sans-serif;
+            --abolition-font: "Abolition", "Arial Narrow", sans-serif;
+            --nueue-font: "Neue Machina", "Arial Black", sans-serif;
+
+            --bg: #FBF9F5;
+            --white: #FFFFFF;
+            --black: #000000;
+            --amber: #fab36a;
+            --cream: #fbe6c1;
+            --burnt-orange: #e05829;
+            --sage: #e5e7da;
+            --teal: #DCEBD7;
+            --olive-light: #b2b792;
+            --grey: #6a6b6b;
+
+            --rule: 2px solid #000;
+            --transition-interaction: all 0.3s ease;
+            --transition-structure: all 1s ease;
+            --pad-section: clamp(1.6rem, 2vw, 2.4rem);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+        ::selection { background: var(--amber); color: var(--black); }
+
+        html { font-size: 16px; background: var(--bg); }
+        body {
+            position: relative;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--black);
+            background: var(--bg);
+            font-family: var(--proxima-font);
+            font-size: 16px;
+            line-height: 1.4;
+            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h4, h5, h6 {
+            margin: 0;
+            font-family: var(--abolition-font);
+            font-weight: 400;
+            text-transform: uppercase;
+            line-height: 1.1;
+            color: var(--black);
+        }
+        h3 {
+            margin: 0;
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        p { margin: 0; }
+        button, input, select, textarea { font: inherit; color: inherit; }
+        .hidden { display: none !important; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- Header / top bar --- */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background: var(--bg);
+        }
+        .topbar::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: -2px;
+            width: 0;
+            height: 2px;
+            background: var(--black);
+            transition: var(--transition-structure);
+            transition-delay: 0.2s;
+        }
+        .topbar.loaded::after { width: 100%; }
+        .topbar-inner {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 1.2rem 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.2rem;
+        }
+        .brand { display: flex; align-items: center; gap: 1.2rem; min-width: 0; }
+        .logo {
+            width: 4.2rem;
+            height: 4.2rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--black);
+            color: var(--bg);
+            border: var(--rule);
+        }
+        .brand-title { font-size: clamp(2rem, 2.3vw, 2.8rem); }
+        .tagline { font-size: 12px; color: var(--grey); margin-top: 0.25rem; }
+        .title-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.55rem;
+            border: 2px solid var(--black);
+            background: var(--white);
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 10px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .chip-high { background: var(--burnt-orange); color: var(--white); }
+        .chip-medium { background: var(--amber); color: var(--black); }
+        .chip-low { background: var(--sage); color: var(--black); }
+        .chip-ok { background: var(--teal); color: var(--black); }
+        .chip-accent { background: var(--cream); color: var(--black); }
+        .chip-dark { background: var(--black); color: var(--bg); }
+
+        .controls { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .seg { display: flex; border: 2px solid var(--black); background: var(--white); }
+        .seg-btn {
+            padding: 0.75rem 1rem;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 11px;
+            line-height: 1;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            transition: var(--transition-interaction);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+        .seg-btn + .seg-btn { border-left: 2px solid var(--black); }
+        .seg-btn:hover:not(.active) { background: var(--amber); }
+        .seg-btn.active { background: var(--black); color: var(--bg); }
+
+        /* --- Startup Phase Toggle Pill --- */
+        .startup-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.65rem 1rem;
+            border: var(--rule);
+            background: var(--cream);
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            transition: var(--transition-interaction);
+        }
+        .startup-toggle.active {
+            background: var(--amber);
+        }
+        .startup-dot {
+            width: 10px;
+            height: 10px;
+            border: 2px solid var(--black);
+            background: var(--white);
+        }
+        .startup-toggle.active .startup-dot {
+            background: var(--burnt-orange);
+        }
+
+        /* --- Buttons --- */
+        .btn {
+            position: relative;
+            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.8rem 1.2rem;
+            border: 2px solid var(--black);
+            background: var(--black);
+            color: var(--bg);
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 11px;
+            line-height: 1;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            transition: color 0.3s ease;
+        }
+        .btn::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 100%;
+            background: var(--burnt-orange);
+            transition: var(--transition-interaction);
+        }
+        .btn > * { position: relative; z-index: 1; }
+        .btn:hover::before { width: 100%; }
+        .btn:hover { color: var(--cream); }
+        .btn-ghost { background: var(--white); color: var(--black); }
+        .btn-ghost:hover { color: var(--white); }
+        .btn-amber { background: var(--amber); color: var(--black); }
+        .btn-amber:hover { color: var(--white); }
+
+        .text-link {
+            position: relative;
+            padding: 0 0 0.3rem;
+            border: 0;
+            background: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.08rem;
+            text-transform: uppercase;
+        }
+        .text-link::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--amber);
+            transition: var(--transition-interaction);
+        }
+        .text-link:hover::before { background: var(--black); }
+
+        .icon-btn {
+            padding: 0.4rem;
+            border: 2px solid transparent;
+            background: transparent;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon-btn:hover { border-color: var(--black); background: var(--amber); }
+
+        /* --- Main layout --- */
+        .main {
+            flex: 1;
+            width: 100%;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .stack { display: flex; flex-direction: column; gap: 2rem; min-width: 0; }
+        .workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 4.6fr) minmax(0, 7.4fr);
+            gap: 2rem;
+            align-items: start;
+        }
+        @media (max-width: 1080px) {
+            .workspace { grid-template-columns: 1fr; }
+        }
+
+        /* --- Panels --- */
+        .panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.4rem;
+            min-width: 0;
+            padding: var(--pad-section);
+            background: var(--white);
+            border: var(--rule);
+        }
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: var(--rule);
+        }
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            font-size: clamp(1.8rem, 1.9vw, 2.3rem);
+        }
+        .muted { font-size: 12px; color: var(--grey); }
+        .section-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.6rem;
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        /* --- KPI row --- */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            border-top: var(--rule);
+            border-left: var(--rule);
+        }
+        .kpi {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1.2rem;
+            min-width: 0;
+            padding: 1.6rem 1.8rem;
+            background: var(--white);
+            border-right: var(--rule);
+            border-bottom: var(--rule);
+        }
+        .kpi-label {
+            font-family: var(--nueue-font);
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .kpi-value {
+            margin-top: 0.6rem;
+            font-family: var(--abolition-font);
+            font-size: clamp(2.6rem, 2.8vw, 3.6rem);
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .kpi-sub { margin-top: 0.6rem; font-size: 12px; color: var(--grey); }
+        .kpi-icon {
+            width: 4rem;
+            height: 4rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .kpi-icon.amber { background: var(--amber); }
+        .kpi-icon.teal { background: var(--teal); }
+        .kpi-icon.cream { background: var(--cream); }
+
+        /* --- Inputs --- */
+        .input, .select, .field {
+            border: var(--rule);
+            background: var(--white);
+            color: var(--black);
+            border-radius: 0;
+        }
+        .input { padding: 0.55rem 0.75rem; font-size: 13px; }
+        .input:focus, .select:focus, .field:focus, .cell-input:focus { outline: 3px solid var(--amber); outline-offset: 0; }
+        .select { padding: 0.45rem 0.7rem; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .mono { font-family: monospace; font-size: 12px; }
+
+        /* --- QBO Metadata Bar inside Inspector --- */
+        .qbo-bar {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            border-top: var(--rule);
+            border-left: var(--rule);
+            background: var(--bg);
+        }
+        @media (max-width: 768px) {
+            .qbo-bar { grid-template-columns: 1fr; }
+        }
+        .qbo-cell {
+            padding: 0.9rem 1rem;
+            border-right: var(--rule);
+            border-bottom: var(--rule);
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .qbo-cell label {
+            font-family: var(--nueue-font);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--grey);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        /* --- QBO Split Preview Banner --- */
+        .split-preview-box {
+            border: var(--rule);
+            background: var(--cream);
+            padding: 1rem 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+        .split-preview-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+        }
+        .split-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.7rem;
+            border: var(--rule);
+            background: var(--white);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        /* --- Upload & Samples --- */
+        .dropzone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.8rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            border: 2px dashed var(--black);
+            background: var(--bg);
+            transition: var(--transition-interaction);
+        }
+        .dropzone:hover { background: var(--amber); }
+        .dropzone-icon {
+            width: 3.8rem;
+            height: 3.8rem;
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: var(--rule);
+            background: var(--white);
+        }
+        .dropzone-title { font-size: 13px; font-weight: 700; }
+        .dropzone-sub { font-size: 11px; color: var(--grey); margin-top: 0.3rem; }
+
+        .progress {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            padding: 1.2rem;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .progress-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .progress-track { height: 12px; border: var(--rule); background: var(--white); }
+        .progress-bar { height: 100%; width: 0; background: var(--burnt-orange); transition: width 0.2s ease; }
+
+        .samples {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding-top: 1.2rem;
+            border-top: var(--rule);
+        }
+        .samples-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; }
+        .sample-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            border-top: var(--rule);
+            border-left: var(--rule);
+        }
+        .sample-btn {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            min-width: 0;
+            padding: 1rem;
+            text-align: left;
+            cursor: pointer;
+            background: var(--white);
+            border: 0;
+            border-right: var(--rule);
+            border-bottom: var(--rule);
+            transition: var(--transition-interaction);
+        }
+        .sample-btn:hover { background: var(--amber); }
+        .sample-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+        .sample-name { font-size: 13px; font-weight: 700; }
+        .sample-desc { font-size: 11px; color: var(--grey); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .sample-btn:hover .sample-desc { color: var(--black); }
+
+        /* --- Receipt queue --- */
+        .queue {
+            display: flex;
+            flex-direction: column;
+            max-height: 480px;
+            overflow-y: auto;
+            border-top: var(--rule);
+            border-left: var(--rule);
+            border-right: var(--rule);
+        }
+        .receipt-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.2rem;
+            background: var(--white);
+            border-bottom: var(--rule);
+            cursor: pointer;
+            transition: var(--transition-interaction);
+        }
+        .receipt-row:hover { background: var(--cream); }
+        .receipt-row.selected { background: var(--amber); }
+        .receipt-main { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+        .receipt-thumb {
+            width: 3.6rem;
+            height: 4.8rem;
+            flex-shrink: 0;
+            object-fit: cover;
+            border: var(--rule);
+            background: var(--white);
+        }
+        .receipt-name {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .receipt-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            margin-top: 0.25rem;
+            font-size: 11px;
+            color: var(--grey);
+            flex-wrap: wrap;
+        }
+        .receipt-row.selected .receipt-meta { color: var(--black); }
+        .receipt-side { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; flex-shrink: 0; }
+        .amount {
+            font-family: var(--abolition-font);
+            font-size: 1.9rem;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .empty {
+            padding: 2rem;
+            text-align: center;
+            font-size: 13px;
+            border: 2px dashed var(--black);
+        }
+
+        /* --- Inspector --- */
+        .inspector {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1.6rem;
+            min-height: 660px;
+            padding: var(--pad-section);
+            background: var(--white);
+            border: var(--rule);
+        }
+        .inspector-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 2rem;
+            text-align: center;
+        }
+        .inspector-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1.2rem;
+            padding-bottom: 1.2rem;
+            border-bottom: var(--rule);
+        }
+        .inspector-title {
+            margin: 0.4rem 0 0.2rem;
+            font-size: clamp(2.4rem, 2.8vw, 3.6rem);
+        }
+        .meta-line { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 12px; }
+        .audit-list { display: flex; flex-direction: column; border: var(--rule); }
+        .audit-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 0.95rem 1.2rem;
+            font-size: 12.5px;
+            border-bottom: var(--rule);
+        }
+        .audit-item:last-child { border-bottom: 0; }
+        .audit-item.high { background: var(--burnt-orange); color: var(--white); }
+        .audit-item.medium { background: var(--amber); color: var(--black); }
+        .audit-item.low { background: var(--sage); color: var(--black); }
+        .audit-item.ok { background: var(--teal); color: var(--black); }
+        .audit-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; font-weight: 700; }
+        .audit-code {
+            padding: 0.1rem 0.4rem;
+            border: var(--rule);
+            background: var(--white);
+            color: var(--black);
+            font-family: monospace;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+        .audit-detail { margin-top: 0.25rem; line-height: 1.45; }
+
+        .split {
+            display: grid;
+            grid-template-columns: minmax(0, 4.2fr) minmax(0, 7.8fr);
+            gap: 1.6rem;
+        }
+        @media (max-width: 860px) {
+            .split { grid-template-columns: 1fr; }
+        }
+        .receipt-visual {
+            display: flex;
+            justify-content: center;
+            padding: 1rem;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .receipt-visual img { max-height: 290px; width: auto; object-fit: contain; }
+        .raw-ocr {
+            margin-top: 1rem;
+            padding: 1rem;
+            border: var(--rule);
+            background: var(--bg);
+            font-size: 12px;
+        }
+        .raw-ocr summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .raw-ocr pre {
+            max-height: 150px;
+            overflow: auto;
+            margin: 0.8rem 0 0;
+            padding-top: 0.8rem;
+            border-top: var(--rule);
+            font-family: monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+        }
+        .items-panel {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1.4rem;
+            padding: 1.4rem;
+            border: var(--rule);
+            background: var(--bg);
+        }
+        .table-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            padding-bottom: 0.5rem;
+            border-bottom: var(--rule);
+            font-family: var(--nueue-font);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-align: left;
+            text-transform: uppercase;
+        }
+        td { padding: 0.45rem 0; border-bottom: var(--rule); font-size: 12.5px; vertical-align: middle; }
+        th.num, td.num { text-align: right; }
+        .cell-input {
+            width: 100%;
+            padding: 0.3rem 0.45rem;
+            border: 2px solid transparent;
+            background: transparent;
+            color: var(--black);
+            font-size: 12.5px;
+        }
+        .cell-input:focus { border-color: var(--black); background: var(--white); }
+        .cell-input.num { width: 6rem; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+        .cell-select {
+            width: 100%;
+            max-width: 220px;
+            padding: 0.3rem 0.4rem;
+            border: var(--rule);
+            background: var(--white);
+            font-size: 11.5px;
+            font-weight: 600;
+        }
+        .totals {
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            padding-top: 1rem;
+            border-top: var(--rule);
+            font-size: 13px;
+        }
+        .total-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+        .field {
+            width: 9.5rem;
+            padding: 0.35rem 0.55rem;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .total-row.grand {
+            padding-top: 0.65rem;
+            border-top: var(--rule);
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .field.grand { width: 10.5rem; font-weight: 700; font-size: 14px; background: var(--amber); }
+
+        /* --- Modals & Toast --- */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.4rem;
+            background: rgba(0, 0, 0, 0.65);
+        }
+        .modal {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 880px;
+            max-height: 88vh;
+            overflow: hidden;
+            background: var(--bg);
+            border: var(--rule);
+        }
+        .modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.3rem 1.8rem;
+            background: var(--white);
+            border-bottom: var(--rule);
+        }
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 1.4rem;
+            padding: 1.8rem;
+            overflow-y: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .note {
+            padding: 1.2rem;
+            border: var(--rule);
+            background: var(--white);
+        }
+        .note-title { font-weight: 700; margin-bottom: 0.4rem; }
+        .code-block {
+            margin: 0;
+            padding: 1.2rem;
+            overflow-x: auto;
+            border: var(--rule);
+            background: var(--white);
+            font-family: monospace;
+            font-size: 11.5px;
+            line-height: 1.45;
+            white-space: pre;
+        }
+
+        .export-card-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            border-top: var(--rule);
+            border-left: var(--rule);
+        }
+        @media (max-width: 768px) {
+            .export-card-grid { grid-template-columns: 1fr; }
+        }
+        .export-card {
+            padding: 1.3rem;
+            background: var(--white);
+            border-right: var(--rule);
+            border-bottom: var(--rule);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .toast-banner {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 80;
+            padding: 0.9rem 1.3rem;
+            border: var(--rule);
+            background: var(--black);
+            color: var(--bg);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+        }
+
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg); border-left: var(--rule); }
+        ::-webkit-scrollbar-thumb { background: var(--black); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--burnt-orange); }
+
+        @media (max-width: 1023px) {
+            .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .kpi-grid { grid-template-columns: 1fr; }
+            .sample-grid { grid-template-columns: 1fr; }
+            .main { padding: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Bar -->
+    <header class="topbar" id="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="logo">
+                    <i data-lucide="truck" style="width:22px;height:22px"></i>
+                </div>
+                <div>
+                    <div class="title-row">
+                        <h1 class="brand-title">White Van Shoebox &rarr; QBO</h1>
+                        <span class="chip chip-ok">
+                            <i data-lucide="shield-check" style="width:12px;height:12px"></i>
+                            100% Local Engine
+                        </span>
+                    </div>
+                    <p class="tagline">Fleet Operations + Startup Phase Categorizer • Pro-Rata Tax Split &amp; QuickBooks Online Exporter</p>
+                </div>
+            </div>
+
+            <!-- Engine Selector & QBO Actions -->
+            <div class="controls">
+                <button id="btnStartupPhase" onclick="toggleStartupPhaseMode()" class="startup-toggle active" title="Show/Hide Tier 2 Startup & Upfitting Categories">
+                    <span class="startup-dot"></span>
+                    <span id="startupModeLabel">Startup Phase: ON</span>
+                </button>
+
+                <button onclick="toggleCoaModal()" class="btn btn-ghost" title="Manage QuickBooks Chart of Accounts & Fleet Vans">
+                    <i data-lucide="sliders" style="width:15px;height:15px"></i>
+                    <span>QBO Accounts</span>
+                </button>
+
+                <button onclick="toggleQboExportModal()" class="btn btn-amber" title="Open QuickBooks Online Export Suite">
+                    <i data-lucide="file-spreadsheet" style="width:15px;height:15px"></i>
+                    <span>QBO Export Suite</span>
+                </button>
+
+                <div class="seg">
+                    <button id="btnModeWasm" onclick="setEngineMode('wasm')" class="seg-btn active">
+                        WASM OCR
+                    </button>
+                    <button id="btnModeOllama" onclick="setEngineMode('ollama')" class="seg-btn">
+                        Ollama VLM
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+
+        <!-- Local Engine Config Panel (Shown when Ollama mode is active) -->
+        <div id="ollamaConfigPanel" class="panel hidden">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1.2rem">
+                <div style="display:flex;align-items:flex-start;gap:1rem">
+                    <div class="kpi-icon cream">
+                        <i data-lucide="cpu" style="width:20px;height:20px"></i>
+                    </div>
+                    <div>
+                        <h3 class="panel-title" style="font-family:var(--abolition-font);font-size:2rem;flex-wrap:wrap">
+                            Local Ollama Vision LLM Bridge
+                            <span id="ollamaStatusBadge" class="chip">Not Checked</span>
+                        </h3>
+                        <p class="muted" style="margin-top:0.3rem">
+                            Connects directly to your machine's local Ollama server (<code class="mono">OLLAMA_ORIGINS=* ollama serve</code>).
+                        </p>
+                    </div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:0.6rem">
+                    <input id="ollamaUrl" type="text" value="http://localhost:11434" class="input mono" style="width:11rem">
+                    <input id="ollamaModel" type="text" value="llama3.2-vision" class="input mono" style="width:9rem">
+                    <button onclick="testOllamaConnection()" class="btn">
+                        <i data-lucide="refresh-cw" style="width:14px;height:14px"></i> Ping Localhost
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Summary Row -->
+        <div class="kpi-grid">
+            <div class="kpi">
+                <div>
+                    <p class="kpi-label">Shoebox Queue</p>
+                    <p id="statCount" class="kpi-value">0</p>
+                    <p id="statSplitSub" class="kpi-sub">0 Split Transactions</p>
+                </div>
+                <div class="kpi-icon">
+                    <i data-lucide="receipt" style="width:20px;height:20px"></i>
+                </div>
+            </div>
+
+            <div class="kpi">
+                <div>
+                    <p class="kpi-label">Fleet Operating Spend</p>
+                    <p id="statOperating" class="kpi-value">$0.00</p>
+                    <p id="statFuelSub" class="kpi-sub">Fuel, Maintenance &amp; Gear</p>
+                </div>
+                <div class="kpi-icon teal">
+                    <i data-lucide="truck" style="width:20px;height:20px"></i>
+                </div>
+            </div>
+
+            <div class="kpi">
+                <div>
+                    <p class="kpi-label">Startup &amp; CapEx Spend</p>
+                    <p id="statStartup" class="kpi-value">$0.00</p>
+                    <p id="statStartupSub" class="kpi-sub">Sec. 195 Startup + Upfitting</p>
+                </div>
+                <div class="kpi-icon cream">
+                    <i data-lucide="rocket" style="width:20px;height:20px"></i>
+                </div>
+            </div>
+
+            <div class="kpi">
+                <div>
+                    <p class="kpi-label">Audit Flags &amp; QBO Ready</p>
+                    <p id="statAnomalies" class="kpi-value">0</p>
+                    <button onclick="toggleQboExportModal()" class="text-link" style="margin-top:0.5rem">
+                        Open QBO Exporter &rarr;
+                    </button>
+                </div>
+                <div class="kpi-icon amber">
+                    <i data-lucide="alert-triangle" style="width:20px;height:20px"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="workspace">
+
+            <!-- Left Column: Uploader + Sample Shoebox + Receipt Queue -->
+            <div class="stack">
+
+                <!-- Upload & Sample Receipt Card -->
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2 class="panel-title">
+                            <i data-lucide="scan-line" style="width:19px;height:19px"></i>
+                            Scan White Van / Startup Receipt
+                        </h2>
+                        <span class="muted">PNG, JPG, WEBP</span>
+                    </div>
+
+                    <!-- Dropzone -->
+                    <label for="receiptFileInput" id="dropZone" class="dropzone">
+                        <div class="dropzone-icon">
+                            <i data-lucide="upload-cloud" style="width:20px;height:20px"></i>
+                        </div>
+                        <p class="dropzone-title">Click to upload receipt photo or drag &amp; drop</p>
+                        <p class="dropzone-sub">Auto-detects Fuel Gallons, Payment Card, CapEx &amp; QBO Splits</p>
+                        <input id="receiptFileInput" type="file" accept="image/*" multiple class="hidden" onchange="handleFileUpload(event)">
+                    </label>
+
+                    <!-- Progress Indicator -->
+                    <div id="ocrProgressBox" class="progress hidden">
+                        <div class="progress-row">
+                            <span id="ocrProgressStatus">
+                                <i data-lucide="loader-2" class="spin" style="width:14px;height:14px"></i>
+                                Running Local Tesseract WASM...
+                            </span>
+                            <span id="ocrProgressPct" class="mono">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div id="ocrProgressBar" class="progress-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- White Van & Startup Sample Receipt Presets -->
+                    <div class="samples">
+                        <div class="samples-head">
+                            <span class="section-label" style="margin:0">White Van &amp; Startup Test Receipts</span>
+                            <button onclick="loadAllSamples()" class="text-link">
+                                + Reset 4 Fleet Samples
+                            </button>
+                        </div>
+                        <div class="sample-grid">
+                            <button onclick="scanGeneratedSample('upfit')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">Upfit &amp; Cargo Gear</span>
+                                    <span class="chip chip-medium">Split + Startup</span>
+                                </div>
+                                <p class="sample-desc">E-Track shelving + straps + personal item</p>
+                            </button>
+
+                            <button onclick="scanGeneratedSample('fuel')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">Metro Diesel &amp; DEF</span>
+                                    <span class="chip chip-ok">Fuel + Gal</span>
+                                </div>
+                                <p class="sample-desc">21.50 gal @ $3.80/gal + DEF + Toll</p>
+                            </button>
+
+                            <button onclick="scanGeneratedSample('liftgate')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">Liftgate &amp; DOT Setup</span>
+                                    <span class="chip chip-high">CapEx &gt;$2.5k</span>
+                                </div>
+                                <p class="sample-desc">$2,850 Hydraulic Liftgate + DOT Decal</p>
+                            </button>
+
+                            <button onclick="scanGeneratedSample('bistro')" class="sample-btn">
+                                <div class="sample-top">
+                                    <span class="sample-name">Road Crew Dinner</span>
+                                    <span class="chip chip-medium">Math + Tip</span>
+                                </div>
+                                <p class="sample-desc">28% tip + $10 receipt total math error</p>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Receipt Shoebox Queue List -->
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2 class="panel-title">
+                            <i data-lucide="layers" style="width:19px;height:19px"></i>
+                            Shoebox Queue
+                        </h2>
+                        <select id="filterAnomalySelect" onchange="renderReceiptList()" class="select">
+                            <option value="all">All Receipts</option>
+                            <option value="splits">Multi-Category Splits</option>
+                            <option value="startup">Startup / CapEx Only</option>
+                            <option value="flagged">Audit Flagged Only</option>
+                        </select>
+                    </div>
+
+                    <div id="receiptListContainer" class="queue">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Interactive QBO Inspector & Anomaly Auditor -->
+            <div class="stack">
+                <div id="inspectorContainer" class="inspector">
+                    <!-- Populated dynamically when a receipt is selected -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Hidden Canvas for Generating Sample Receipt Photos for OCR Testing -->
+    <canvas id="sampleReceiptCanvas" width="440" height="640" class="hidden"></canvas>
+
+    <!-- QuickBooks Online Export Suite Modal -->
+    <div id="qboExportModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <div class="modal-head">
+                <div style="display:flex;align-items:center;gap:1rem">
+                    <div class="kpi-icon amber">
+                        <i data-lucide="file-spreadsheet" style="width:20px;height:20px"></i>
+                    </div>
+                    <div>
+                        <h3 style="font-family:var(--abolition-font);font-size:2rem;font-weight:400;letter-spacing:0">QuickBooks Online (QBO) Export Suite</h3>
+                        <p class="muted">Pro-rata tax &amp; tip allocation • Dates formatted as <code class="mono">MM/DD/YYYY</code> • Blob UTF-8 safe</p>
+                    </div>
+                </div>
+                <button onclick="toggleQboExportModal()" class="icon-btn" aria-label="Close">
+                    <i data-lucide="x" style="width:20px;height:20px"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Export Gatekeeper & Tax Allocation Options -->
+                <div class="note" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;background:var(--cream)">
+                    <div>
+                        <p class="note-title">Tax &amp; Tip Split Allocation Mode</p>
+                        <p class="muted" style="color:var(--black)">
+                            US QuickBooks Online includes sales tax and gratuity inside the expense account total so splits match the exact credit card charge to the penny.
+                        </p>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.8rem;align-items:center">
+                        <label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+                            <input type="checkbox" id="chkExcludeHighAnomalies" onchange="renderQboModalPreview()">
+                            Exclude Unresolved Math Error Receipts
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Three Purpose-Built QBO Export Cards -->
+                <div class="export-card-grid">
+                    <!-- Option 1: QBO 4-Column Bank Feed CSV -->
+                    <div class="export-card">
+                        <div>
+                            <span class="chip chip-ok">Option 1 • Bank Feed</span>
+                            <h4 style="font-size:1.5rem;margin-top:0.5rem">QBO 4-Column Standard CSV</h4>
+                            <p class="muted" style="margin-top:0.4rem">
+                                Exact <code class="mono">Date, Description, Credit, Debit</code> schema for <strong style="color:#000">Transactions &gt; Bank Transactions &gt; Upload</strong>. Packs split hints, Van Class, and fuel gallons into Description.
+                            </p>
+                        </div>
+                        <button onclick="downloadQboBankFeedCSV()" class="btn">
+                            <i data-lucide="download" style="width:14px;height:14px"></i>
+                            <span>Download 4-Col CSV</span>
+                        </button>
+                    </div>
+
+                    <!-- Option 2: QBO Detailed Split & Multi-Category CSV -->
+                    <div class="export-card">
+                        <div>
+                            <span class="chip chip-medium">Option 2 • Split Ledger</span>
+                            <h4 style="font-size:1.5rem;margin-top:0.5rem">QBO Detailed Split CSV</h4>
+                            <p class="muted" style="margin-top:0.4rem">
+                                Consolidates multi-item receipts into <strong style="color:#000">one row per QBO Category Split</strong> with pro-rata tax/tip included, <code class="mono">PaidFromAccount</code>, <code class="mono">Class_Van_ID</code>, and <code class="mono">Startup_Flag</code>.
+                            </p>
+                        </div>
+                        <button onclick="downloadQboSplitJournalCSV()" class="btn">
+                            <i data-lucide="git-branch" style="width:14px;height:14px"></i>
+                            <span>Download Split CSV</span>
+                        </button>
+                    </div>
+
+                    <!-- Option 3: QBO Web Connect (.QBO / OFX) -->
+                    <div class="export-card">
+                        <div>
+                            <span class="chip chip-accent">Option 3 • Native .QBO</span>
+                            <h4 style="font-size:1.5rem;margin-top:0.5rem">QuickBooks Web Connect (.QBO)</h4>
+                            <p class="muted" style="margin-top:0.4rem">
+                                Generates an OFX/QBO XML bank statement file with unique <code class="mono">&lt;FITID&gt;</code> transaction IDs so QuickBooks Online automatically prevents duplicate imports.
+                            </p>
+                        </div>
+                        <button onclick="downloadQboWebConnectFile()" class="btn">
+                            <i data-lucide="code-2" style="width:14px;height:14px"></i>
+                            <span>Download .QBO File</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Preview of Split Rows -->
+                <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">
+                        <span class="section-label" style="margin:0">Live Preview: QBO Consolidated Split Rows (Tax-Inclusive)</span>
+                        <span id="qboPreviewSummary" class="mono muted"></span>
+                    </div>
+                    <pre id="qboLivePreviewBlock" class="code-block" style="max-height:200px"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage QBO Chart of Accounts & Fleet Modal -->
+    <div id="coaModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <div class="modal-head">
+                <div style="display:flex;align-items:center;gap:1rem">
+                    <div class="kpi-icon teal">
+                        <i data-lucide="sliders" style="width:20px;height:20px"></i>
+                    </div>
+                    <div>
+                        <h3 style="font-family:var(--abolition-font);font-size:2rem;font-weight:400;letter-spacing:0">Two-Tier QBO Chart of Accounts &amp; Fleet Config</h3>
+                        <p class="muted">Customize QBO category names, add one-off startup accounts, or archive launch categories in Year 2</p>
+                    </div>
+                </div>
+                <button onclick="toggleCoaModal()" class="icon-btn" aria-label="Close">
+                    <i data-lucide="x" style="width:20px;height:20px"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Add Custom QBO Category -->
+                <div class="note">
+                    <p class="note-title">Add Custom QBO Account Category</p>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.6rem">
+                        <input id="newCoaName" type="text" placeholder="e.g., Startup Costs: Warehouse Security" class="input" style="flex:1;min-width:220px">
+                        <select id="newCoaTier" class="select">
+                            <option value="operating">Tier 1: Core Operating (Permanent)</option>
+                            <option value="startup" selected>Tier 2: Startup &amp; Launch (Archivable)</option>
+                        </select>
+                        <input id="newCoaKeywords" type="text" placeholder="Keywords (comma-separated)" class="input" style="width:210px">
+                        <button onclick="addCustomCoaCategory()" class="btn">
+                            <i data-lucide="plus" style="width:14px;height:14px"></i> Add QBO Account
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Two-Tier Account List -->
+                <div id="coaManagerList" style="display:flex;flex-direction:column;gap:1rem">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toastBanner" class="toast-banner hidden">
+        <i data-lucide="check-circle-2" style="width:16px;height:16px"></i>
+        <span id="toastText">Action completed</span>
+    </div>
+
+    <script>
+        // --- TWO-TIER QUICKBOOKS ONLINE CHART OF ACCOUNTS (CoA) ---
+        const DEFAULT_COA_ACCOUNTS = [
+            // Tier 1: Core White Van Operating Accounts (Permanent)
+            {
+                id: 'veh_fuel',
+                name: 'Vehicle: Fuel & DEF',
+                tier: 'operating',
+                archived: false,
+                keywords: ['fuel', 'diesel', 'unleaded', 'gasoline', 'def ', 'blue def', 'gallon', 'shell', 'chevron', 'exxon', 'pilot', 'loves']
+            },
+            {
+                id: 'veh_maint',
+                name: 'Vehicle: Repairs & Maintenance',
+                tier: 'operating',
+                archived: false,
+                keywords: ['oil change', 'tire', 'brake', 'car wash', 'wiper', 'alignment', 'filter', 'mechanic', 'service', 'wash']
+            },
+            {
+                id: 'veh_tolls',
+                name: 'Vehicle: Parking, Tolls & Citations',
+                tier: 'operating',
+                archived: false,
+                keywords: ['toll', 'ezpass', 'turnpike', 'parking', 'meter', 'garage', 'bridge']
+            },
+            {
+                id: 'op_supplies',
+                name: 'Operating Supplies & Moving Gear',
+                tier: 'operating',
+                archived: false,
+                keywords: ['ratchet', 'strap', 'blanket', 'dolly', 'shrink wrap', 'tape', 'gloves', 'ppe', 'bungee', 'tarp', 'moving']
+            },
+            {
+                id: 'meals_perdiem',
+                name: 'Meals (50% Limit) & Driver Per Diem',
+                tier: 'operating',
+                archived: false,
+                keywords: ['bistro', 'cafe', 'coffee', 'grill', 'burger', 'pizza', 'salmon', 'fries', 'flatbread', 'dinner', 'lunch', 'water', 'platter']
+            },
+            {
+                id: 'office_dispatch',
+                name: 'Office & Dispatch Software',
+                tier: 'operating',
+                archived: false,
+                keywords: ['toner', 'paper', 'usb', 'hub', 'clipboard', 'mount', 'charger', 'cable', 'dispatch', 'eld']
+            },
+            {
+                id: 'owners_draw',
+                name: "Owner's Draw / Personal (Non-Reimbursable)",
+                tier: 'operating',
+                archived: false,
+                keywords: ['gift card', 'playstation', 'xbox', 'cabernet', 'wine', 'beer', 'bourbon', 'personal', 'lottery']
+            },
+            // Tier 2: Startup, Upfitting & Launch Accounts (Toggleable / Archivable)
+            {
+                id: 'startup_upfit',
+                name: 'Startup Costs: Fleet Upfitting & Shelving',
+                tier: 'startup',
+                archived: false,
+                keywords: ['e-track', 'etrack', 'shelving', 'bulkhead', 'partition', 'roof rack', 'cargo light', 'upfit', 'floor mat']
+            },
+            {
+                id: 'startup_dot',
+                name: 'Startup Costs: Licensing, Permits & DOT',
+                tier: 'startup',
+                archived: false,
+                keywords: ['usdot', 'mc number', 'llc', 'permit', 'registration', 'inspection fee', 'filing', 'authority']
+            },
+            {
+                id: 'startup_brand',
+                name: 'Startup Costs: Branding & Signage',
+                tier: 'startup',
+                archived: false,
+                keywords: ['decal', 'vinyl wrap', 'magnet', 'lettering', 'logo', 'uniform', 'signage']
+            },
+            {
+                id: 'fixed_assets',
+                name: 'Fixed Assets: Equipment & Tools (> $2,500)',
+                tier: 'startup',
+                archived: false,
+                keywords: ['liftgate', 'hydraulic', 'pallet jack', 'forklift', 'hoist', 'generator']
+            },
+            {
+                id: 'startup_preopen',
+                name: 'Startup Costs: Pre-Opening Supplies',
+                tier: 'startup',
+                archived: false,
+                keywords: ['initial stock', 'starter kit', 'launch kit', 'lockbox']
+            }
+        ];
+
+        // QBO Bank / Credit Card Mapping Options
+        const QBO_PAYMENT_ACCOUNTS = [
+            'Chase Ink Business Visa (*4921)',
+            'Amex Plum Fleet Card (*1004)',
+            'Relay Business Checking (*8832)',
+            'Founder Personal Card (Due to Owner / Reimbursable)',
+            'Petty Cash / Driver Cash'
+        ];
+
+        // QBO Fleet Class / Location Options
+        const QBO_FLEET_CLASSES = [
+            'Van #1 - Ford Transit 250',
+            'Van #2 - Mercedes Sprinter',
+            'Van #3 - RAM ProMaster',
+            'General Fleet / Shared Ops',
+            'Startup / Launch Phase (Unassigned)'
+        ];
+
+        let engineMode = 'wasm';
+        let startupPhaseMode = true;
+        let coaAccounts = loadCoaFromStorage();
+        let receipts = [];
+        let selectedReceiptId = null;
+
+        function loadCoaFromStorage() {
+            try {
+                const saved = localStorage.getItem('qbo_white_van_coa_v1');
+                if (saved) return JSON.parse(saved);
+            } catch (e) {
+                console.warn('localStorage unavailable, using default CoA');
+            }
+            return JSON.parse(JSON.stringify(DEFAULT_COA_ACCOUNTS));
+        }
+
+        function saveCoaToStorage() {
+            try {
+                localStorage.setItem('qbo_white_van_coa_v1', JSON.stringify(coaAccounts));
+            } catch (e) {
+                console.warn('Could not persist CoA to localStorage');
+            }
+        }
+
+        function getActiveCategories() {
+            return coaAccounts.filter(c => {
+                if (c.archived) return false;
+                if (!startupPhaseMode && c.tier === 'startup') return false;
+                return true;
+            });
+        }
+
+        // --- WHITE VAN & STARTUP SAMPLE RECEIPT TEMPLATES ---
+        const SAMPLE_TEMPLATES = {
+            upfit: {
+                merchant: "PRO VAN UPFITTERS & SUPPLY",
+                address: "1140 Industrial Pkwy, Memphis TN",
+                date: "2026-10-14",
+                time: "09:42",
+                vanClass: "Van #1 - Ford Transit 250",
+                expensePhase: "Startup (One-Off)",
+                items: [
+                    { name: "Steel E-Track Shelving Kit", qty: 1, price: 340.00 },
+                    { name: "Cargo Bulkhead Partition", qty: 1, price: 480.00 },
+                    { name: "Heavy Duty Ratchet Straps 4pk", qty: 1, price: 65.00 },
+                    { name: "Quilted Moving Blankets 12pk", qty: 1, price: 95.00 },
+                    { name: "PlayStation Gift Card", qty: 1, price: 50.00 }
+                ],
+                subtotal: 1030.00,
+                tax: 95.28,
+                tip: 0.00,
+                total: 1125.28,
+                paymentMethod: "VISA *4921",
+                paidFromAccount: "Chase Ink Business Visa (*4921)"
+            },
+            fuel: {
+                merchant: "METRO DIESEL & FLEET STOP",
+                address: "780 I-40 East Service Rd",
+                date: "2026-10-15",
+                time: "06:18",
+                vanClass: "Van #2 - Mercedes Sprinter",
+                expensePhase: "Operating (Recurring)",
+                extraNote: "PUMP #04: 21.500 GAL @ $3.809/GAL",
+                items: [
+                    { name: "ULSD #2 Diesel 21.50 GAL @ $3.80/gal", qty: 1, price: 81.70 },
+                    { name: "BlueDEF Diesel Exhaust Fluid 2.5G", qty: 1, price: 18.50 },
+                    { name: "I-40 Express Bridge Toll", qty: 1, price: 6.00 }
+                ],
+                subtotal: 106.20,
+                tax: 4.30,
+                tip: 0.00,
+                total: 110.50,
+                paymentMethod: "AMEX *1004",
+                paidFromAccount: "Amex Plum Fleet Card (*1004)"
+            },
+            liftgate: {
+                merchant: "APEX COMMERCIAL TRUCK EQUIP",
+                address: "402 Fleet Way, Suite B",
+                date: "2026-10-12",
+                time: "15:20",
+                vanClass: "Van #1 - Ford Transit 250",
+                expensePhase: "Startup (One-Off)",
+                items: [
+                    { name: "Tommy Gate Hydraulic Liftgate Installed", qty: 1, price: 2850.00 },
+                    { name: "USDOT Magnetic Door Decals Pair", qty: 1, price: 145.00 },
+                    { name: "Commercial Registration & DOT Filing", qty: 1, price: 210.00 }
+                ],
+                subtotal: 3205.00,
+                tax: 264.41,
+                tip: 0.00,
+                total: 3469.41,
+                paymentMethod: "PERSONAL VISA *0091",
+                paidFromAccount: "Founder Personal Card (Due to Owner / Reimbursable)"
+            },
+            bistro: {
+                merchant: "HIGHWAY 61 DINER & GRILL",
+                address: "420 Artisan Way, Suite 100",
+                date: "2026-10-11", // Sunday
+                time: "21:18",
+                vanClass: "General Fleet / Shared Ops",
+                expensePhase: "Operating (Recurring)",
+                items: [
+                    { name: "Pan Seared Salmon", qty: 1, price: 32.00 },
+                    { name: "Truffle Fries", qty: 1, price: 14.00 },
+                    { name: "Artisan Flatbread", qty: 1, price: 18.00 },
+                    { name: "Reserve Cabernet Glass", qty: 2, price: 36.00 }
+                ],
+                subtotal: 100.00,
+                tax: 8.50,
+                tip: 28.00,
+                // Intentional math anomaly: 100 + 8.50 + 28.00 = 136.50, printed total = 146.50
+                total: 146.50,
+                paymentMethod: "VISA *4921",
+                paidFromAccount: "Chase Ink Business Visa (*4921)"
+            }
+        };
+
+        /**
+         * Determines the best QBO Category for a single line item, respecting manual overrides
+         */
+        function inferLineItemQboCategory(item) {
+            if (item.manualCategory) return item.category;
+            const lowerName = (item.name || '').toLowerCase();
+            const price = Number(item.price || 0) * Number(item.qty || 1);
+
+            // Rule 1: Capitalization / Fixed Asset threshold >= $2,500
+            if (price >= 2500) {
+                return 'Fixed Assets: Equipment & Tools (> $2,500)';
+            }
+
+            // Rule 2: Match against active CoA keywords
+            for (const acc of coaAccounts) {
+                if ((acc.keywords || []).some(kw => lowerName.includes(kw.toLowerCase()))) {
+                    return acc.name;
+                }
+            }
+
+            return item.category || 'Operating Supplies & Moving Gear';
+        }
+
+        /**
+         * Maps raw OCR payment strings to a structured QBO Bank/Card account
+         */
+        function mapPaymentMethodToQboAccount(paymentStr = '') {
+            const upper = paymentStr.toUpperCase();
+            if (upper.includes('4921')) return 'Chase Ink Business Visa (*4921)';
+            if (upper.includes('1004') || upper.includes('AMEX')) return 'Amex Plum Fleet Card (*1004)';
+            if (upper.includes('8832') || upper.includes('MASTERCARD')) return 'Relay Business Checking (*8832)';
+            if (upper.includes('PERSONAL') || upper.includes('0091')) return 'Founder Personal Card (Due to Owner / Reimbursable)';
+            if (upper.includes('CASH')) return 'Petty Cash / Driver Cash';
+            return 'Chase Ink Business Visa (*4921)';
+        }
+
+        /**
+         * Extracts Fuel Gallons & Price/Gal from receipt lines or OCR text
+         */
+        function extractFuelMetadata(receiptData) {
+            const combinedText = [
+                receiptData.rawOcrText || '',
+                receiptData.extraNote || '',
+                ...(receiptData.items || []).map(i => i.name)
+            ].join(' ');
+
+            const galMatch = combinedText.match(/(\d+\.\d{1,3})\s*GAL(?:LONS?)?(?:\s*@\s*\$?(\d+\.\d{2,3}))?/i);
+            if (galMatch) {
+                const gallons = parseFloat(galMatch[1]).toFixed(2);
+                const pricePerGal = galMatch[2] ? `$${parseFloat(galMatch[2]).toFixed(2)}/gal` : '';
+                return pricePerGal ? `${gallons} gal @ ${pricePerGal}` : `${gallons} gal pumped`;
+            }
+            return null;
+        }
+
+        /**
+         * Calculates Pro-Rata Tax & Tip Split Breakdown per QBO Category
+         * Formula: LineTotal_QBO = ItemPrice + (ReceiptTax + ReceiptTip) * (ItemPrice / Subtotal)
+         */
+        function computeProRataSplits(receiptData) {
+            const items = receiptData.items || [];
+            const computedSub = items.reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.qty) || 1), 0);
+            const taxAndTip = Number(receiptData.tax || 0) + Number(receiptData.tip || 0);
+            const targetGrandTotal = Number(receiptData.total || (computedSub + taxAndTip));
+
+            // Group by QBO Category
+            const groupMap = {};
+            items.forEach(item => {
+                const cat = item.category || 'Operating Supplies & Moving Gear';
+                const itemTotal = (Number(item.price) || 0) * (Number(item.qty) || 1);
+                if (!groupMap[cat]) {
+                    groupMap[cat] = {
+                        category: cat,
+                        rawSubtotal: 0,
+                        allocatedTaxTip: 0,
+                        qboSplitAmount: 0,
+                        itemNames: []
+                    };
+                }
+                groupMap[cat].rawSubtotal += itemTotal;
+                groupMap[cat].itemNames.push(item.name);
+            });
+
+            const splits = Object.values(groupMap);
+            let runningSum = 0;
+
+            splits.forEach((sp, idx) => {
+                const ratio = computedSub > 0 ? (sp.rawSubtotal / computedSub) : (1 / Math.max(splits.length, 1));
+                sp.allocatedTaxTip = taxAndTip * ratio;
+                if (idx === splits.length - 1 && Math.abs((computedSub + taxAndTip) - targetGrandTotal) < 0.05) {
+                    // Penny-rounding adjustment on final split so sum equals exact card charge
+                    sp.qboSplitAmount = Number((targetGrandTotal - runningSum).toFixed(2));
+                } else {
+                    sp.qboSplitAmount = Number((sp.rawSubtotal + sp.allocatedTaxTip).toFixed(2));
+                    runningSum += sp.qboSplitAmount;
+                }
+            });
+
+            return splits;
+        }
+
+        /**
+         * Core Local Anomaly Detection, White Van Fleet Rules & QBO Split Engine
+         */
+        function auditAndCategorizeReceipt(receiptData) {
+            const anomalies = [];
+
+            // Ensure QBO Header Defaults
+            if (!receiptData.paidFromAccount) {
+                receiptData.paidFromAccount = mapPaymentMethodToQboAccount(receiptData.paymentMethod || '');
+            }
+            if (!receiptData.vanClass) {
+                receiptData.vanClass = 'Van #1 - Ford Transit 250';
+            }
+
+            // 1. Categorize each line item & calculate pro-rata share
+            const items = receiptData.items || [];
+            const computedSubtotal = items.reduce((acc, item) => acc + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+            const taxAndTip = Number(receiptData.tax || 0) + Number(receiptData.tip || 0);
+
+            receiptData.items = items.map(item => {
+                const lineBase = (Number(item.price) || 0) * (Number(item.qty) || 1);
+                const matchedCat = inferLineItemQboCategory(item);
+                const ratio = computedSubtotal > 0 ? (lineBase / computedSubtotal) : 0;
+                const taxInclusiveAmount = lineBase + (taxAndTip * ratio);
+
+                // Rule A: Personal / Non-Reimbursable or Alcohol check
+                const lowerName = (item.name || '').toLowerCase();
+                if (
+                    matchedCat.includes("Owner's Draw") ||
+                    lowerName.includes('wine') ||
+                    lowerName.includes('cabernet') ||
+                    lowerName.includes('gift card')
+                ) {
+                    anomalies.push({
+                        severity: 'high',
+                        code: 'OWNER_DRAW_SPLIT',
+                        title: `Personal / Non-Deductible Item: "${item.name}"`,
+                        detail: `"${item.name}" ($${lineBase.toFixed(2)}) is routed to "Owner's Draw / Personal" so it doesn't pollute business operating deductions.`
+                    });
+                }
+
+                // Rule B: Capitalization / De Minimis Safe Harbor Threshold (>= $2,500)
+                if (lineBase >= 2500) {
+                    anomalies.push({
+                        severity: 'high',
+                        code: 'CAPEX_THRESHOLD',
+                        title: `Fixed Asset / CapEx Threshold Alert ($${lineBase.toFixed(2)})`,
+                        detail: `"${item.name}" exceeds the $2,500 IRS De Minimis Safe Harbor threshold. Flagged under "Fixed Assets: Equipment & Tools" for Section 179 / Depreciation.`
+                    });
+                }
+
+                return {
+                    ...item,
+                    category: matchedCat,
+                    taxInclusiveAmount: Number(taxInclusiveAmount.toFixed(2))
+                };
+            });
+
+            // 2. Compute Consolidated QBO Category Splits
+            const qboSplits = computeProRataSplits(receiptData);
+            receiptData.qboSplits = qboSplits;
+
+            // Determine dominant category & auto-detect Startup Phase presence
+            let dominantCategory = 'Operating Supplies & Moving Gear';
+            let maxSplitVal = -1;
+            let hasStartupCategory = false;
+
+            qboSplits.forEach(sp => {
+                if (sp.qboSplitAmount > maxSplitVal) {
+                    maxSplitVal = sp.qboSplitAmount;
+                    dominantCategory = sp.category;
+                }
+                const coaObj = coaAccounts.find(c => c.name === sp.category);
+                if ((coaObj && coaObj.tier === 'startup') || sp.category.startsWith('Startup') || sp.category.startsWith('Fixed Assets')) {
+                    hasStartupCategory = true;
+                }
+            });
+
+            receiptData.category = dominantCategory;
+            if (!receiptData.expensePhase) {
+                receiptData.expensePhase = hasStartupCategory ? 'Startup (One-Off)' : 'Operating (Recurring)';
+            }
+
+            // Rule C: Commingled / Multi-Category Split Notification
+            if (qboSplits.length > 1) {
+                const splitSummary = qboSplits.map(s => `${s.category.split(':')[0]} ($${s.qboSplitAmount.toFixed(2)})`).join(' + ');
+                anomalies.push({
+                    severity: 'medium',
+                    code: 'MIXED_RECEIPT_SPLIT',
+                    title: `Split Transaction Required (${qboSplits.length} QBO Accounts)`,
+                    detail: `Receipt spans multiple categories: ${splitSummary}. Tax & tip have been pro-rated across each split automatically.`
+                });
+            }
+
+            // Rule D: Fuel Gallons Metadata Extraction
+            const isFuelReceipt = qboSplits.some(s => s.category.includes('Fuel'));
+            const fuelMeta = extractFuelMetadata(receiptData);
+            receiptData.fuelMeta = fuelMeta;
+            if (isFuelReceipt && !fuelMeta) {
+                anomalies.push({
+                    severity: 'low',
+                    code: 'FUEL_GALLONS_CHECK',
+                    title: 'Fuel Receipt Missing Gallons Metadata',
+                    detail: 'Categorized under Vehicle: Fuel & DEF, but gallons pumped were not detected in OCR text for IFTA/fleet mileage tracking.'
+                });
+            }
+
+            // 3. Audit Line Item Sum vs Subtotal
+            const declaredSubtotal = Number(receiptData.subtotal ?? computedSubtotal);
+            if (receiptData.items.length > 0 && Math.abs(computedSubtotal - declaredSubtotal) > 0.05) {
+                anomalies.push({
+                    severity: 'high',
+                    code: 'SUBTOTAL_MISMATCH',
+                    title: 'Line Item Sum ≠ Subtotal',
+                    detail: `Sum of line items is $${computedSubtotal.toFixed(2)}, but receipt subtotal states $${declaredSubtotal.toFixed(2)} (Diff: $${Math.abs(computedSubtotal - declaredSubtotal).toFixed(2)}).`
+                });
+            }
+
+            // 4. Audit Subtotal + Tax + Tip vs Grand Total
+            const tax = Number(receiptData.tax || 0);
+            const tip = Number(receiptData.tip || 0);
+            const declaredTotal = Number(receiptData.total || 0);
+            const expectedTotal = declaredSubtotal + tax + tip;
+
+            if (Math.abs(expectedTotal - declaredTotal) > 0.05) {
+                anomalies.push({
+                    severity: 'high',
+                    code: 'TOTAL_MATH_ERROR',
+                    title: `Receipt Total Math Discrepancy ($${Math.abs(expectedTotal - declaredTotal).toFixed(2)})`,
+                    detail: `Subtotal ($${declaredSubtotal.toFixed(2)}) + Tax ($${tax.toFixed(2)}) + Tip ($${tip.toFixed(2)}) = $${expectedTotal.toFixed(2)}, but printed Total is $${declaredTotal.toFixed(2)}.`
+                });
+            }
+
+            // 5. Audit Excessive Tip Percentage (> 20%)
+            if (declaredSubtotal > 0 && tip > 0) {
+                const tipPct = (tip / declaredSubtotal) * 100;
+                if (tipPct > 20.5) {
+                    anomalies.push({
+                        severity: 'medium',
+                        code: 'EXCESSIVE_TIP',
+                        title: `High Gratuity Flag (${tipPct.toFixed(1)}%)`,
+                        detail: `Tip of $${tip.toFixed(2)} on $${declaredSubtotal.toFixed(2)} subtotal is ${tipPct.toFixed(1)}%, exceeding 20% fleet meal policy.`
+                    });
+                }
+            }
+
+            // 6. Audit Duplicate Line Items
+            const seenItems = {};
+            receiptData.items.forEach(item => {
+                const key = `${(item.name || '').toLowerCase().trim()}_${Number(item.price).toFixed(2)}`;
+                seenItems[key] = (seenItems[key] || 0) + 1;
+            });
+            for (const [key, count] of Object.entries(seenItems)) {
+                if (count > 1) {
+                    const [dupName, dupPrice] = key.split('_');
+                    anomalies.push({
+                        severity: 'medium',
+                        code: 'DUPLICATE_ITEM',
+                        title: `Double-Scanned Item (${count}x)`,
+                        detail: `"${dupName.toUpperCase()}" at $${dupPrice} appears ${count} times on this receipt.`
+                    });
+                }
+            }
+
+            receiptData.anomalies = anomalies;
+            receiptData.computedSubtotal = computedSubtotal;
+            receiptData.expectedTotal = expectedTotal;
+            return receiptData;
+        }
+
+        function generateSampleReceiptImage(template) {
+            const canvas = document.getElementById('sampleReceiptCanvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = 440;
+            canvas.height = 450 + (template.items.length * 32);
+
+            ctx.fillStyle = '#fcfaf2';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(0,0,0,0.02)';
+            for (let i = 0; i < 280; i++) {
+                ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
+            }
+
+            ctx.fillStyle = '#111827';
+            ctx.textAlign = 'center';
+
+            ctx.font = 'bold 20px monospace';
+            ctx.fillText(template.merchant, canvas.width / 2, 44);
+
+            ctx.font = '12px monospace';
+            ctx.fillText(template.address, canvas.width / 2, 66);
+            ctx.fillText(`DATE: ${template.date}   TIME: ${template.time}`, canvas.width / 2, 88);
+            if (template.extraNote) {
+                ctx.font = 'bold 12px monospace';
+                ctx.fillText(template.extraNote, canvas.width / 2, 108);
+            }
+
+            ctx.textAlign = 'left';
+            ctx.font = '13px monospace';
+            ctx.fillText('----------------------------------------', 24, 130);
+
+            let y = 158;
+            ctx.font = '13px monospace';
+            template.items.forEach(item => {
+                ctx.textAlign = 'left';
+                const truncatedName = item.name.length > 29 ? item.name.slice(0, 29) : item.name;
+                ctx.fillText(truncatedName, 24, y);
+                ctx.textAlign = 'right';
+                ctx.fillText(`${item.price.toFixed(2)}`, canvas.width - 24, y);
+                y += 30;
+            });
+
+            ctx.textAlign = 'left';
+            ctx.fillText('----------------------------------------', 24, y);
+            y += 28;
+
+            const drawRow = (label, val, bold = false) => {
+                ctx.font = bold ? 'bold 16px monospace' : '14px monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText(label, 24, y);
+                ctx.textAlign = 'right';
+                ctx.fillText(`$${val.toFixed(2)}`, canvas.width - 24, y);
+                y += 26;
+            };
+
+            drawRow('SUBTOTAL', template.subtotal);
+            drawRow('TAX', template.tax);
+            drawRow('TIP', template.tip);
+            y += 4;
+            drawRow('TOTAL', template.total, true);
+
+            y += 12;
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`PAID VIA ${template.paymentMethod} - CUSTOMER COPY`, canvas.width / 2, y);
+
+            return canvas.toDataURL('image/png');
+        }
+
+        function parseRawOcrTextToReceipt(rawText, fallbackFileName = 'Uploaded Receipt') {
+            const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+
+            let merchant = fallbackFileName.replace(/\.[^/.]+$/, "");
+            let date = new Date().toISOString().slice(0, 10);
+            let paymentMethod = 'VISA *4921';
+            const items = [];
+            let subtotal = null;
+            let tax = 0;
+            let tip = 0;
+            let total = null;
+
+            for (const line of lines.slice(0, 4)) {
+                if (line.length > 3 && !line.includes('DATE:') && !/^\d+$/.test(line)) {
+                    merchant = line.replace(/[^a-zA-Z0-9 &'-]/g, '').trim();
+                    break;
+                }
+            }
+
+            const dateMatch = rawText.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+            if (dateMatch) date = dateMatch[0];
+
+            // Extract Payment Card / Method from OCR text
+            const payMatch = rawText.match(/(VISA|AMEX|MASTERCARD|DISCOVER|DEBIT|CASH)\s*(?:\*+\d{4})?/i);
+            if (payMatch) paymentMethod = payMatch[0].toUpperCase();
+
+            const priceLineRegex = /^(.+?)\s+\$?(\d+\.\d{2})$/;
+
+            lines.forEach(line => {
+                const cleanLine = line.replace(/[|]/g, '').trim();
+                const match = cleanLine.match(priceLineRegex);
+                if (match) {
+                    const label = match[1].replace(/^[-\d\s*]+/, '').trim();
+                    const amount = parseFloat(match[2]);
+                    const upperLabel = label.toUpperCase();
+
+                    if (upperLabel.includes('SUBTOTAL') || upperLabel.includes('SUB TOTAL')) {
+                        subtotal = amount;
+                    } else if (upperLabel.includes('TAX') || upperLabel.includes('VAT')) {
+                        tax = amount;
+                    } else if (upperLabel.includes('TIP') || upperLabel.includes('GRATUITY')) {
+                        tip = amount;
+                    } else if (upperLabel.includes('TOTAL') || upperLabel.includes('AMOUNT DUE')) {
+                        total = amount;
+                    } else if (label.length >= 2 && !upperLabel.includes('CASH') && !upperLabel.includes('CHANGE')) {
+                        items.push({ name: label, qty: 1, price: amount });
+                    }
+                }
+            });
+
+            const computedSub = items.reduce((s, i) => s + i.price, 0);
+            if (subtotal === null) subtotal = computedSub;
+            if (total === null) total = subtotal + tax + tip;
+
+            return {
+                merchant: merchant || 'Unidentified Merchant',
+                date,
+                paymentMethod,
+                paidFromAccount: mapPaymentMethodToQboAccount(paymentMethod),
+                items,
+                subtotal,
+                tax,
+                tip,
+                total,
+                rawOcrText: rawText
+            };
+        }
+
+        async function processReceiptImageLocally(imageDataUrl, fileName, optionalTemplateHint = null) {
+            const progressBox = document.getElementById('ocrProgressBox');
+            const progressStatus = document.getElementById('ocrProgressStatus');
+            const progressPct = document.getElementById('ocrProgressPct');
+            const progressBar = document.getElementById('ocrProgressBar');
+
+            progressBox.classList.remove('hidden');
+            progressBar.style.width = '8%';
+            progressPct.textContent = '8%';
+
+            try {
+                let structuredReceipt = null;
+                let usedEngineLabel = 'Browser WASM OCR + QBO Rules';
+
+                if (engineMode === 'ollama') {
+                    progressStatus.innerHTML = `<i data-lucide="cpu" class="spin" style="width:14px;height:14px"></i> Querying Local Ollama Vision Model...`;
+                    lucide.createIcons();
+                    progressBar.style.width = '45%';
+                    progressPct.textContent = 'Local LLM';
+
+                    structuredReceipt = await runLocalOllamaVision(imageDataUrl);
+                    usedEngineLabel = `Local Ollama (${document.getElementById('ollamaModel').value})`;
+                } else {
+                    progressStatus.innerHTML = `<i data-lucide="scan-line" class="spin" style="width:14px;height:14px"></i> Running Local WebAssembly OCR...`;
+                    lucide.createIcons();
+
+                    const result = await Tesseract.recognize(imageDataUrl, 'eng', {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                const pct = Math.round(m.progress * 100);
+                                progressBar.style.width = `${pct}%`;
+                                progressPct.textContent = `${pct}%`;
+                            }
+                        }
+                    });
+
+                    const rawText = result.data.text;
+                    structuredReceipt = parseRawOcrTextToReceipt(rawText, fileName);
+
+                    if (optionalTemplateHint && structuredReceipt.items.length === 0) {
+                        structuredReceipt = {
+                            ...JSON.parse(JSON.stringify(optionalTemplateHint)),
+                            rawOcrText: rawText
+                        };
+                    } else if (optionalTemplateHint) {
+                        structuredReceipt.vanClass = optionalTemplateHint.vanClass;
+                        structuredReceipt.expensePhase = optionalTemplateHint.expensePhase;
+                        structuredReceipt.paidFromAccount = optionalTemplateHint.paidFromAccount;
+                    }
+                }
+
+                const audited = auditAndCategorizeReceipt({
+                    id: 'rcpt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                    imageUrl: imageDataUrl,
+                    engineUsed: usedEngineLabel,
+                    ...structuredReceipt
+                });
+
+                receipts.unshift(audited);
+                selectedReceiptId = audited.id;
+                updateDashboard();
+                showToast(`Scanned & mapped "${audited.merchant}" to QBO accounts`);
+            } catch (err) {
+                console.error('Local processing error:', err);
+                showToast(`Local Engine Notice: ${err.message}`);
+            } finally {
+                setTimeout(() => {
+                    progressBox.classList.add('hidden');
+                }, 350);
+            }
+        }
+
+        async function runLocalOllamaVision(imageDataUrl) {
+            const baseUrl = document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
+            const model = document.getElementById('ollamaModel').value.trim() || 'llama3.2-vision';
+            const base64Data = imageDataUrl.split(',')[1];
+
+            const prompt = `Extract this receipt image into strict JSON with keys:
+"merchant" (string), "date" (YYYY-MM-DD), "paymentMethod" (string), "items" (array of {"name": string, "qty": number, "price": number}), "subtotal" (number), "tax" (number), "tip" (number), "total" (number). Return ONLY valid JSON.`;
+
+            const response = await fetch(`${baseUrl}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    prompt: prompt,
+                    images: [base64Data],
+                    format: 'json',
+                    stream: false
+                })
+            });
+
+            if (!response.ok) throw new Error(`Could not reach Ollama at ${baseUrl}`);
+            const data = await response.json();
+            const parsed = JSON.parse(data.response);
+            parsed.rawOcrText = JSON.stringify(parsed, null, 2);
+            return parsed;
+        }
+
+        async function testOllamaConnection() {
+            const badge = document.getElementById('ollamaStatusBadge');
+            const baseUrl = document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
+            badge.textContent = 'Checking...';
+            badge.className = 'chip chip-medium';
+
+            try {
+                const res = await fetch(`${baseUrl}/api/tags`);
+                if (res.ok) {
+                    const data = await res.json();
+                    badge.textContent = `Connected (${(data.models || []).length} local models)`;
+                    badge.className = 'chip chip-ok';
+                } else {
+                    throw new Error('Status ' + res.status);
+                }
+            } catch (e) {
+                badge.textContent = 'Offline (Run: OLLAMA_ORIGINS=* ollama serve)';
+                badge.className = 'chip chip-high';
+            }
+        }
+
+        function setEngineMode(mode) {
+            engineMode = mode;
+            document.getElementById('btnModeWasm').className = mode === 'wasm' ? 'seg-btn active' : 'seg-btn';
+            document.getElementById('btnModeOllama').className = mode === 'ollama' ? 'seg-btn active' : 'seg-btn';
+            document.getElementById('ollamaConfigPanel').classList.toggle('hidden', mode !== 'ollama');
+            if (mode === 'ollama') testOllamaConnection();
+        }
+
+        function toggleStartupPhaseMode() {
+            startupPhaseMode = !startupPhaseMode;
+            const btn = document.getElementById('btnStartupPhase');
+            const label = document.getElementById('startupModeLabel');
+            btn.classList.toggle('active', startupPhaseMode);
+            label.textContent = startupPhaseMode ? 'Startup Phase: ON' : 'Startup Phase: OFF (Year 2+)';
+            renderInspector();
+            showToast(startupPhaseMode
+                ? 'Tier 2 Startup & Upfitting QBO categories enabled'
+                : 'Startup categories hidden — showing permanent Fleet Operating CoA only');
+        }
+
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files || []);
+            for (const file of files) {
+                const dataUrl = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+                await processReceiptImageLocally(dataUrl, file.name);
+            }
+            event.target.value = '';
+        }
+
+        async function scanGeneratedSample(sampleKey) {
+            const template = SAMPLE_TEMPLATES[sampleKey];
+            if (!template) return;
+            const imageDataUrl = generateSampleReceiptImage(template);
+            await processReceiptImageLocally(imageDataUrl, `${template.merchant}.png`, template);
+        }
+
+        function loadAllSamples() {
+            receipts = [];
+            ['upfit', 'fuel', 'liftgate', 'bistro'].forEach((key, idx) => {
+                const template = JSON.parse(JSON.stringify(SAMPLE_TEMPLATES[key]));
+                const imageDataUrl = generateSampleReceiptImage(template);
+                const rawText = `${template.merchant}\n${template.address}\nDATE: ${template.date} TIME: ${template.time}\n` +
+                    (template.extraNote ? `${template.extraNote}\n` : '') +
+                    template.items.map(i => `${i.name} $${i.price.toFixed(2)}`).join('\n') +
+                    `\nSUBTOTAL $${template.subtotal.toFixed(2)}\nTAX $${template.tax.toFixed(2)}\nTIP $${template.tip.toFixed(2)}\nTOTAL $${template.total.toFixed(2)}\nPAID VIA ${template.paymentMethod}`;
+
+                const audited = auditAndCategorizeReceipt({
+                    id: 'rcpt_' + (1001 + idx) + '_' + key,
+                    imageUrl: imageDataUrl,
+                    engineUsed: 'Browser WASM OCR + QBO Rules',
+                    rawOcrText: rawText,
+                    ...template
+                });
+                receipts.push(audited);
+            });
+            if (receipts.length > 0) selectedReceiptId = receipts[0].id;
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            document.getElementById('statCount').textContent = receipts.length;
+            const splitCount = receipts.filter(r => (r.qboSplits || []).length > 1).length;
+            document.getElementById('statSplitSub').textContent = `${splitCount} Multi-Category Split${splitCount === 1 ? '' : 's'}`;
+
+            let operatingSpend = 0;
+            let startupSpend = 0;
+            let totalAnomalies = 0;
+
+            receipts.forEach(r => {
+                totalAnomalies += (r.anomalies ? r.anomalies.length : 0);
+                (r.qboSplits || []).forEach(sp => {
+                    const coa = coaAccounts.find(c => c.name === sp.category);
+                    const isStartup = (coa && coa.tier === 'startup') || sp.category.startsWith('Startup') || sp.category.startsWith('Fixed Assets');
+                    if (isStartup || r.expensePhase === 'Startup (One-Off)') {
+                        startupSpend += sp.qboSplitAmount;
+                    } else {
+                        operatingSpend += sp.qboSplitAmount;
+                    }
+                });
+            });
+
+            document.getElementById('statOperating').textContent = `$${operatingSpend.toFixed(2)}`;
+            document.getElementById('statStartup').textContent = `$${startupSpend.toFixed(2)}`;
+            document.getElementById('statAnomalies').textContent = totalAnomalies;
+
+            renderReceiptList();
+            renderInspector();
+            lucide.createIcons();
+        }
+
+        function renderReceiptList() {
+            const container = document.getElementById('receiptListContainer');
+            const filter = document.getElementById('filterAnomalySelect').value;
+
+            const filtered = receipts.filter(r => {
+                if (filter === 'splits') return (r.qboSplits || []).length > 1;
+                if (filter === 'startup') return r.expensePhase === 'Startup (One-Off)' || (r.qboSplits || []).some(s => s.category.includes('Startup') || s.category.includes('Fixed Assets'));
+                if (filter === 'flagged') return r.anomalies && r.anomalies.length > 0;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="empty"><p class="muted">No receipts match this filter.</p></div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(r => {
+                const isSelected = r.id === selectedReceiptId;
+                const splitCount = (r.qboSplits || []).length;
+                const isStartup = r.expensePhase === 'Startup (One-Off)';
+
+                const splitBadge = splitCount > 1
+                    ? `<span class="chip chip-medium"><i data-lucide="git-branch" style="width:11px;height:11px"></i> ${splitCount} Splits</span>`
+                    : `<span class="chip chip-ok"><i data-lucide="check" style="width:11px;height:11px"></i> 1 Account</span>`;
+
+                const phaseBadge = isStartup
+                    ? `<span class="chip chip-accent">Startup</span>`
+                    : '';
+
+                return `
+                    <div onclick="selectReceipt('${r.id}')" class="receipt-row ${isSelected ? 'selected' : ''}">
+                        <div class="receipt-main">
+                            <img src="${r.imageUrl}" alt="${r.merchant}" class="receipt-thumb">
+                            <div style="min-width:0">
+                                <h4 class="receipt-name">${r.merchant}</h4>
+                                <div class="receipt-meta">
+                                    <span class="mono">${r.date}</span>
+                                    <span>•</span>
+                                    <span style="font-weight:700">${r.vanClass.split(' - ')[0]}</span>
+                                </div>
+                                <div class="receipt-meta" style="margin-top:0.15rem">
+                                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.category}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="receipt-side">
+                            <span class="amount">$${Number(r.total).toFixed(2)}</span>
+                            <div style="display:flex;gap:0.35rem;flex-wrap:wrap;justify-content:flex-end">
+                                ${phaseBadge}
+                                ${splitBadge}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function selectReceipt(id) {
+            selectedReceiptId = id;
+            renderReceiptList();
+            renderInspector();
+            lucide.createIcons();
+        }
+
+        function renderInspector() {
+            const container = document.getElementById('inspectorContainer');
+            const receipt = receipts.find(r => r.id === selectedReceiptId);
+
+            if (!receipt) {
+                container.innerHTML = `
+                    <div class="inspector-empty">
+                        <div class="dropzone-icon" style="width:52px;height:52px">
+                            <i data-lucide="file-search" style="width:24px;height:24px"></i>
+                        </div>
+                        <h3 style="font-family:var(--abolition-font);font-weight:400;font-size:2.2rem">No Receipt Selected</h3>
+                        <p>Select a receipt from the Shoebox Queue or scan one of the White Van presets on the left.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Build dropdown options for QBO Categories
+            const activeCats = getActiveCategories();
+            const buildCategoryOptions = (selectedCat) => {
+                const tier1 = activeCats.filter(c => c.tier === 'operating');
+                const tier2 = activeCats.filter(c => c.tier === 'startup');
+
+                let html = `<optgroup label="Tier 1: White Van Operating (Permanent)">`;
+                tier1.forEach(c => {
+                    html += `<option value="${c.name}" ${c.name === selectedCat ? 'selected' : ''}>${c.name}</option>`;
+                });
+                html += `</optgroup>`;
+
+                if (tier2.length > 0 || tier2.some(c => c.name === selectedCat)) {
+                    html += `<optgroup label="Tier 2: Startup & Upfitting (Launch Phase)">`;
+                    tier2.forEach(c => {
+                        html += `<option value="${c.name}" ${c.name === selectedCat ? 'selected' : ''}>${c.name}</option>`;
+                    });
+                    html += `</optgroup>`;
+                }
+
+                // Fallback if current category is hidden/archived
+                if (!activeCats.some(c => c.name === selectedCat)) {
+                    html += `<option value="${selectedCat}" selected>${selectedCat} (Archived)</option>`;
+                }
+                return html;
+            };
+
+            // Build Paid From options
+            const paidFromOptionsHtml = QBO_PAYMENT_ACCOUNTS.map(acc =>
+                `<option value="${acc}" ${receipt.paidFromAccount === acc ? 'selected' : ''}>${acc}</option>`
+            ).join('');
+
+            // Build Fleet / Van Class options
+            const vanClassOptionsHtml = QBO_FLEET_CLASSES.map(v =>
+                `<option value="${v}" ${receipt.vanClass === v ? 'selected' : ''}>${v}</option>`
+            ).join('');
+
+            // Build Anomalies list
+            const anomaliesHtml = receipt.anomalies && receipt.anomalies.length > 0
+                ? receipt.anomalies.map(a => `
+                        <div class="audit-item ${a.severity}">
+                            <i data-lucide="alert-octagon" style="width:16px;height:16px;flex-shrink:0;margin-top:2px"></i>
+                            <div style="min-width:0">
+                                <div class="audit-title">
+                                    <span>${a.title}</span>
+                                    <span class="audit-code">${a.code}</span>
+                                </div>
+                                <p class="audit-detail">${a.detail}</p>
+                            </div>
+                        </div>
+                    `).join('')
+                : `
+                    <div class="audit-item ok">
+                        <i data-lucide="shield-check" style="width:18px;height:18px;flex-shrink:0"></i>
+                        <div>
+                            <p class="audit-title">All White Van &amp; QBO Audit Checks Passed</p>
+                            <p class="audit-detail">Math verified, single QBO ledger category assigned, and ready for direct bank feed or journal import.</p>
+                        </div>
+                    </div>
+                `;
+
+            // Build QBO Pro-Rata Split Summary Pills
+            const splitsPillsHtml = (receipt.qboSplits || []).map(sp => `
+                <div class="split-pill">
+                    <span>${sp.category}</span>
+                    <span class="chip chip-dark">$${sp.qboSplitAmount.toFixed(2)}</span>
+                </div>
+            `).join('');
+
+            // Build Editable Line Item Rows with Interactive QBO Category Select & Tax-Inclusive Column
+            const itemsRowsHtml = receipt.items.map((item, idx) => `
+                <tr>
+                    <td style="padding-right:0.5rem">
+                        <input type="text" value="${item.name}" onchange="updateLineItem('${receipt.id}', ${idx}, 'name', this.value)"
+                            class="cell-input">
+                    </td>
+                    <td style="padding:0 0.5rem">
+                        <select onchange="updateLineItemCategory('${receipt.id}', ${idx}, this.value)" class="cell-select">
+                            ${buildCategoryOptions(item.category)}
+                        </select>
+                    </td>
+                    <td class="num" style="padding:0 0.4rem">
+                        <input type="number" step="0.01" value="${Number(item.price).toFixed(2)}" onchange="updateLineItem('${receipt.id}', ${idx}, 'price', this.value)"
+                            class="cell-input num">
+                    </td>
+                    <td class="num mono" style="padding-left:0.4rem;font-weight:700;color:var(--grey)" title="Includes pro-rata share of receipt Tax & Tip for QBO Split">
+                        $${Number(item.taxInclusiveAmount || item.price).toFixed(2)}
+                    </td>
+                </tr>
+            `).join('');
+
+            container.innerHTML = `
+                <div style="display:flex;flex-direction:column;gap:1.5rem">
+                    <!-- Top Inspector Header -->
+                    <div class="inspector-head">
+                        <div>
+                            <div class="meta-line">
+                                <span class="chip chip-ok mono">${receipt.engineUsed}</span>
+                                <span class="mono muted">Date: ${formatDateForQBO(receipt.date)}</span>
+                                ${receipt.fuelMeta ? `<span class="chip chip-accent"><i data-lucide="fuel" style="width:11px;height:11px"></i> ${receipt.fuelMeta}</span>` : ''}
+                            </div>
+                            <h2 class="inspector-title">${receipt.merchant}</h2>
+                            <p class="muted">QBO Memo Preview: <code class="mono" style="color:#000">${buildQboBankMemo(receipt)}</code></p>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                            <button onclick="downloadRenamedReceiptImage('${receipt.id}')" class="btn btn-ghost" title="Download image named for QBO Receipt Attachment matching">
+                                <i data-lucide="image-down" style="width:14px;height:14px"></i>
+                                <span>Save QBO Image</span>
+                            </button>
+                            <button onclick="deleteReceipt('${receipt.id}')" class="btn btn-ghost">
+                                <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Receipt-Level QBO Metadata Routing Bar -->
+                    <div class="qbo-bar">
+                        <div class="qbo-cell">
+                            <label><i data-lucide="credit-card" style="width:11px;height:11px"></i> Paid From QBO Account</label>
+                            <select onchange="updateReceiptMetadata('${receipt.id}', 'paidFromAccount', this.value)" class="select">
+                                ${paidFromOptionsHtml}
+                            </select>
+                        </div>
+                        <div class="qbo-cell">
+                            <label><i data-lucide="truck" style="width:11px;height:11px"></i> Fleet / Van Assignment (QBO Class)</label>
+                            <select onchange="updateReceiptMetadata('${receipt.id}', 'vanClass', this.value)" class="select">
+                                ${vanClassOptionsHtml}
+                            </select>
+                        </div>
+                        <div class="qbo-cell">
+                            <label><i data-lucide="flag" style="width:11px;height:11px"></i> Expense Phase Tag</label>
+                            <select onchange="updateReceiptMetadata('${receipt.id}', 'expensePhase', this.value)" class="select">
+                                <option value="Operating (Recurring)" ${receipt.expensePhase === 'Operating (Recurring)' ? 'selected' : ''}>Operating (Recurring)</option>
+                                <option value="Startup (One-Off)" ${receipt.expensePhase === 'Startup (One-Off)' ? 'selected' : ''}>Startup (One-Off / Sec. 195)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Pro-Rata QBO Split Allocation Summary -->
+                    <div class="split-preview-box">
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+                            <span class="section-label" style="margin:0">
+                                <i data-lucide="git-branch" style="width:13px;height:13px"></i>
+                                QuickBooks Tax-Inclusive Split Breakdown (${(receipt.qboSplits || []).length} Account${(receipt.qboSplits || []).length === 1 ? '' : 's'})
+                            </span>
+                            <span class="muted" style="color:#000;font-weight:600">
+                                Split Sum: $${(receipt.qboSplits || []).reduce((s, x) => s + x.qboSplitAmount, 0).toFixed(2)}
+                            </span>
+                        </div>
+                        <div class="split-preview-grid">
+                            ${splitsPillsHtml}
+                        </div>
+                    </div>
+
+                    <!-- Anomaly Audit Report Section -->
+                    <div>
+                        <h3 class="section-label">
+                            <i data-lucide="file-warning" style="width:14px;height:14px"></i>
+                            White Van &amp; Startup Policy Audit (${receipt.anomalies.length})
+                        </h3>
+                        <div class="audit-list">
+                            ${anomaliesHtml}
+                        </div>
+                    </div>
+
+                    <!-- Split View: Receipt Image Preview + Editable Extracted Table -->
+                    <div class="split">
+                        <div>
+                            <div class="receipt-visual">
+                                <img src="${receipt.imageUrl}" alt="Receipt Image">
+                            </div>
+                            <details class="raw-ocr">
+                                <summary>
+                                    <span>View Raw Local OCR Output</span>
+                                    <i data-lucide="code" style="width:14px;height:14px"></i>
+                                </summary>
+                                <pre>${receipt.rawOcrText || 'No raw text available'}</pre>
+                            </details>
+                        </div>
+
+                        <!-- Extracted Line Items & Interactive QBO Categorizer -->
+                        <div class="items-panel">
+                            <div>
+                                <div class="table-head">
+                                    <h4 class="section-label" style="margin:0">Line Items &amp; QBO Category Assignment</h4>
+                                    <button onclick="addLineItem('${receipt.id}')" class="text-link">+ Add Line Item</button>
+                                </div>
+                                <div style="overflow-x:auto">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Description</th>
+                                                <th style="padding:0 0.5rem">QBO Account</th>
+                                                <th class="num" style="padding:0 0.4rem">Item $</th>
+                                                <th class="num" title="Item price + pro-rata share of Tax & Tip">QBO Split $</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${itemsRowsHtml}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Totals Breakdown -->
+                            <div class="totals">
+                                <div class="total-row">
+                                    <span class="muted">Extracted Subtotal:</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.subtotal).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'subtotal', this.value)"
+                                        class="field">
+                                </div>
+                                <div class="total-row">
+                                    <span class="muted">Sales Tax (Pro-rated into QBO splits):</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.tax).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'tax', this.value)"
+                                        class="field">
+                                </div>
+                                <div class="total-row">
+                                    <span class="muted">Tip / Gratuity:</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.tip).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'tip', this.value)"
+                                        class="field">
+                                </div>
+                                <div class="total-row grand">
+                                    <span>Receipt Printed Total:</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.total).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'total', this.value)"
+                                        class="field grand">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateLineItem(receiptId, itemIdx, field, value) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt || !receipt.items[itemIdx]) return;
+            receipt.items[itemIdx][field] = field === 'price' ? parseFloat(value || 0) : value;
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function updateLineItemCategory(receiptId, itemIdx, newCategory) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt || !receipt.items[itemIdx]) return;
+            receipt.items[itemIdx].category = newCategory;
+            receipt.items[itemIdx].manualCategory = true;
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function updateReceiptMetadata(receiptId, field, value) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt) return;
+            receipt[field] = value;
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function addLineItem(receiptId) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt) return;
+            receipt.items.push({
+                name: 'New Fleet / Startup Item',
+                qty: 1,
+                price: 0.00,
+                category: 'Operating Supplies & Moving Gear',
+                manualCategory: true
+            });
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function updateReceiptField(receiptId, field, value) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt) return;
+            receipt[field] = parseFloat(value || 0);
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function deleteReceipt(receiptId) {
+            receipts = receipts.filter(r => r.id !== receiptId);
+            selectedReceiptId = receipts[0]?.id || null;
+            updateDashboard();
+        }
+
+        // --- TWO-TIER COA MANAGER MODAL ---
+        function toggleCoaModal() {
+            const modal = document.getElementById('coaModal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                renderCoaManagerList();
+            }
+        }
+
+        function renderCoaManagerList() {
+            const container = document.getElementById('coaManagerList');
+            const renderTierSection = (tierKey, title) => {
+                const list = coaAccounts.filter(c => c.tier === tierKey);
+                return `
+                    <div class="note">
+                        <p class="note-title">${title}</p>
+                        <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.6rem">
+                            ${list.map(acc => `
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;padding:0.45rem 0;border-bottom:1px solid #ddd;flex-wrap:wrap">
+                                    <div style="display:flex;align-items:center;gap:0.6rem">
+                                        <span class="chip ${acc.tier === 'startup' ? 'chip-accent' : 'chip-ok'}">${acc.tier}</span>
+                                        <strong style="${acc.archived ? 'text-decoration:line-through;color:var(--grey)' : ''}">${acc.name}</strong>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:0.6rem">
+                                        <span class="mono muted">Keywords: ${(acc.keywords || []).slice(0, 4).join(', ')}</span>
+                                        <button onclick="toggleArchiveCoa('${acc.id}')" class="btn btn-ghost" style="padding:0.35rem 0.65rem;font-size:10px">
+                                            ${acc.archived ? 'Restore' : 'Archive'}
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            };
+
+            container.innerHTML =
+                renderTierSection('operating', 'Tier 1: Core White Van Operating Accounts (Permanent)') +
+                renderTierSection('startup', 'Tier 2: Startup, Upfitting & Launch Accounts (Archivable after Launch)');
+        }
+
+        function addCustomCoaCategory() {
+            const nameInput = document.getElementById('newCoaName');
+            const tierSelect = document.getElementById('newCoaTier');
+            const kwInput = document.getElementById('newCoaKeywords');
+
+            const name = nameInput.value.trim();
+            if (!name) return;
+
+            const keywords = kwInput.value.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+            coaAccounts.push({
+                id: 'custom_' + Date.now(),
+                name,
+                tier: tierSelect.value,
+                archived: false,
+                keywords
+            });
+            saveCoaToStorage();
+            nameInput.value = '';
+            kwInput.value = '';
+            renderCoaManagerList();
+            renderInspector();
+            showToast(`Added QBO Category: "${name}"`);
+        }
+
+        function toggleArchiveCoa(id) {
+            const acc = coaAccounts.find(c => c.id === id);
+            if (!acc) return;
+            acc.archived = !acc.archived;
+            saveCoaToStorage();
+            renderCoaManagerList();
+            renderInspector();
+        }
+
+        /**
+         * Formats YYYY-MM-DD into strict MM/DD/YYYY required by QuickBooks Online CSV Importer
+         */
+        function formatDateForQBO(dateStr) {
+            if (!dateStr) return '10/16/2026';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                const [yyyy, mm, dd] = dateStr.split('-');
+                return `${mm}/${dd}/${yyyy}`;
+            }
+            return dateStr;
+        }
+
+        /**
+         * Packs Vendor, Split Breakdown, Van Class, and Fuel Metadata into QBO's Description string
+         */
+        function buildQboBankMemo(receipt) {
+            const splits = receipt.qboSplits || [];
+            const splitHint = splits.length > 1
+                ? `[SPLIT: ${splits.map(s => `${s.category.split(':')[0]} $${s.qboSplitAmount.toFixed(2)}`).join(' / ')}]`
+                : `[${receipt.category}]`;
+
+            const vanShort = (receipt.vanClass || 'General').split(' - ')[0];
+            const fuelStr = receipt.fuelMeta ? ` | ${receipt.fuelMeta}` : '';
+            const itemsSummary = (receipt.items || []).map(i => i.name).slice(0, 3).join(', ');
+
+            return `${receipt.merchant} | ${splitHint} | ${vanShort}${fuelStr} | ${itemsSummary}`;
+        }
+
+        function getExportableReceipts() {
+            const excludeHigh = document.getElementById('chkExcludeHighAnomalies')?.checked;
+            if (!excludeHigh) return receipts;
+            return receipts.filter(r => !(r.anomalies || []).some(a => a.code === 'TOTAL_MATH_ERROR' || a.code === 'SUBTOTAL_MISMATCH'));
+        }
+
+        function toggleQboExportModal() {
+            const modal = document.getElementById('qboExportModal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                renderQboModalPreview();
+                lucide.createIcons();
+            }
+        }
+
+        function renderQboModalPreview() {
+            const list = getExportableReceipts();
+            const previewEl = document.getElementById('qboLivePreviewBlock');
+            const summaryEl = document.getElementById('qboPreviewSummary');
+
+            const headers = ['ReceiptRefID', 'Date', 'Vendor', 'PaidFromAccount', 'QBO_Category_Account', 'Split_Amount_Inc_Tax', 'Class_Van_ID', 'Startup_Flag', 'Memo_Line_Items'];
+            const rows = [];
+
+            list.forEach(r => {
+                (r.qboSplits || []).forEach(sp => {
+                    rows.push([
+                        r.id,
+                        formatDateForQBO(r.date),
+                        r.merchant,
+                        r.paidFromAccount,
+                        sp.category,
+                        `$${sp.qboSplitAmount.toFixed(2)}`,
+                        r.vanClass,
+                        r.expensePhase.includes('Startup') ? 'YES' : 'NO',
+                        sp.itemNames.join('; ') + (r.fuelMeta ? ` (${r.fuelMeta})` : '')
+                    ].join(' | '));
+                });
+            });
+
+            summaryEl.textContent = `${list.length} Receipts -> ${rows.length} QBO Split Journal Rows`;
+            previewEl.textContent = [headers.join(' | '), '-'.repeat(115), ...rows].join('\n');
+        }
+
+        /**
+         * Safe UTF-8 Blob Downloader (prevents # character truncation bugs)
+         */
+        function triggerBlobDownload(content, filename, mimeType = 'text/csv;charset=utf-8;') {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function escapeCsvCell(val) {
+            const str = String(val ?? '');
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+
+        // EXPORT OPTION 1: QBO 4-Column Standard Bank Feed CSV (Date, Description, Credit, Debit)
+        function downloadQboBankFeedCSV() {
+            const list = getExportableReceipts();
+            if (list.length === 0) return;
+
+            const headers = ['Date', 'Description', 'Credit', 'Debit'];
+            const rows = list.map(r => [
+                formatDateForQBO(r.date),
+                escapeCsvCell(buildQboBankMemo(r)),
+                '',
+                Number(r.total || 0).toFixed(2)
+            ]);
+
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            triggerBlobDownload(csv, `QBO_BankFeed_4Col_${new Date().toISOString().slice(0, 10)}.csv`);
+            showToast('Downloaded QBO 4-Column Bank Feed CSV');
+        }
+
+        // EXPORT OPTION 2: QBO Detailed Split & Multi-Category CSV (1 Row Per Categorized Split)
+        function downloadQboSplitJournalCSV() {
+            const list = getExportableReceipts();
+            if (list.length === 0) return;
+
+            const headers = [
+                'ReceiptRefID',
+                'Date',
+                'Vendor_Payee',
+                'PaidFromAccount',
+                'QBO_Category_Account',
+                'Split_Amount_Inc_Tax',
+                'Class_Van_ID',
+                'Startup_Flag',
+                'Memo_Line_Items',
+                'Audit_Flags'
+            ];
+
+            const rows = [];
+            list.forEach(r => {
+                const auditFlags = (r.anomalies || []).map(a => a.code).join('; ') || 'CLEAN';
+                (r.qboSplits || []).forEach(sp => {
+                    const memo = sp.itemNames.join('; ') + (r.fuelMeta ? ` [${r.fuelMeta}]` : '');
+                    rows.push([
+                        escapeCsvCell(r.id),
+                        formatDateForQBO(r.date),
+                        escapeCsvCell(r.merchant),
+                        escapeCsvCell(r.paidFromAccount),
+                        escapeCsvCell(sp.category),
+                        Number(sp.qboSplitAmount).toFixed(2),
+                        escapeCsvCell(r.vanClass),
+                        escapeCsvCell(r.expensePhase),
+                        escapeCsvCell(memo),
+                        escapeCsvCell(auditFlags)
+                    ]);
+                });
+            });
+
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            triggerBlobDownload(csv, `QBO_Detailed_Splits_${new Date().toISOString().slice(0, 10)}.csv`);
+            showToast('Downloaded QBO Multi-Category Split CSV');
+        }
+
+        // EXPORT OPTION 3: QBO Web Connect (.QBO / OFX XML)
+        function downloadQboWebConnectFile() {
+            const list = getExportableReceipts();
+            if (list.length === 0) return;
+
+            const nowStamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+            const trnBlocks = list.map(r => {
+                const dtPosted = (r.date || '2026-10-16').replace(/-/g, '') + '120000';
+                const cleanName = (r.merchant || 'VENDOR').replace(/[<>&]/g, '').slice(0, 32);
+                const cleanMemo = buildQboBankMemo(r).replace(/[<>&]/g, '').slice(0, 240);
+                return `
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>${dtPosted}
+<TRNAMT>-${Number(r.total || 0).toFixed(2)}
+<FITID>${r.id}
+<NAME>${cleanName}
+<MEMO>${cleanMemo}
+</STMTTRN>`;
+            }).join('\n');
+
+            const qboContent = `OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+SECURITY:NONE
+ENCODING:USASCII
+CHARSET:1252
+COMPRESSION:NONE
+OLDFILEUID:NONE
+NEWFILEUID:NONE
+
+<OFX>
+<SIGNONMSGSRSV1>
+<SONRS>
+<STATUS><CODE>0<SEVERITY>INFO</STATUS>
+<DTSERVER>${nowStamp}
+<LANGUAGE>ENG
+<INTU.BID>3000
+</SONRS>
+</SIGNONMSGSRSV1>
+<CREDITCARDMSGSRSV1>
+<CCSTMTTRNRS>
+<TRNUID>1
+<STATUS><CODE>0<SEVERITY>INFO</STATUS>
+<CCSTMTRS>
+<CURDEF>USD
+<CCACCTFROM><ACCTID>WHITEVAN-FLEET-4921</CCACCTFROM>
+<BANKTRANLIST>
+<DTSTART>20260101000000
+<DTEND>${nowStamp}
+${trnBlocks}
+</BANKTRANLIST>
+</CCSTMTRS>
+</CCSTMTTRNRS>
+</CREDITCARDMSGSRSV1>
+</OFX>`;
+
+            triggerBlobDownload(qboContent, `WhiteVan_Shoebox_${new Date().toISOString().slice(0, 10)}.qbo`, 'application/vnd.intu.qbo');
+            showToast('Downloaded QuickBooks Web Connect (.QBO) file');
+        }
+
+        // matched Receipt Image Naming Helper for QBO Receipts Tab
+        function downloadRenamedReceiptImage(receiptId) {
+            const r = receipts.find(x => x.id === receiptId);
+            if (!r || !r.imageUrl) return;
+
+            const safeMerchant = (r.merchant || 'Receipt').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+            const splitTag = (r.qboSplits || []).length > 1 ? 'SPLIT' : 'SINGLE';
+            const vanTag = (r.vanClass || 'Van1').split(' - ')[0].replace(/[^a-zA-Z0-9]/g, '');
+            const filename = `${r.date}_${safeMerchant}_$${Number(r.total).toFixed(2)}_${splitTag}_${vanTag}.png`;
+
+            const link = document.createElement('a');
+            link.href = r.imageUrl;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast(`Saved "${filename}" for QBO Receipt Attachment`);
+        }
+
+        function showToast(message) {
+            const banner = document.getElementById('toastBanner');
+            const text = document.getElementById('toastText');
+            text.textContent = message;
+            banner.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {
+                banner.classList.add('hidden');
+            }, 3200);
+        }
+
+        // Initialize with the 4 White Van & Startup sample receipts
+        window.onload = function() {
+            loadAllSamples();
+            lucide.createIcons();
+            document.getElementById('topbar').classList.add('loaded');
+        };
+    </script>
+</body>
+</html>
