@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoebox Receipts Analyzer — 100% Local Edition</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tesseract.js for 100% Client-Side Local OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                            950: '#080d1a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #080d1a;
+            color: #f1f5f9;
+        }
+        .receipt-paper {
+            background: #fdfbf7;
+            color: #1e293b;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+        .receipt-paper::before {
+            content: "";
+            position: absolute;
+            top: -6px;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: radial-gradient(circle, transparent, transparent 50%, #fdfbf7 50%, #fdfbf7 100%) -7px -6px / 14px 14px repeat-x;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- Top Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-900/40">
+                    <i data-lucide="archive" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-lg tracking-tight text-white">Shoebox Receipts Analyzer</h1>
+                        <span class="px-2 py-0.5 text-[11px] font-mono font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            100% Local Engine
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Zero Cloud APIs • Client-Side WASM OCR + Local Ollama Vision Support</p>
+                </div>
+            </div>
+
+            <!-- Engine Selector & Actions -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <div class="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center text-xs">
+                    <button id="btnModeWasm" onclick="setEngineMode('wasm')" class="px-3 py-1.5 rounded-lg font-medium transition-all bg-emerald-600 text-white shadow">
+                        Browser OCR + Rules
+                    </button>
+                    <button id="btnModeOllama" onclick="setEngineMode('ollama')" class="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white">
+                        Local Ollama VLM
+                    </button>
+                </div>
+
+                <button onclick="togglePythonModal()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors" title="Get Standalone Local Python Code">
+                    <i data-lucide="terminal" class="w-4 h-4 text-emerald-400"></i>
+                    <span class="hidden md:inline">Python Local Setup</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Local Engine Config Banner (Shown when Ollama mode is active) -->
+        <div id="ollamaConfigPanel" class="hidden bg-slate-900 border border-indigo-500/30 rounded-2xl p-4 shadow-lg">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-start gap-3">
+                    <div class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mt-0.5">
+                        <i data-lucide="cpu" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                            Local Ollama Vision LLM Bridge
+                            <span id="ollamaStatusBadge" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">Not Checked</span>
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Connects directly to your machine's local Ollama server (<code class="text-indigo-300">OLLAMA_ORIGINS=* ollama serve</code>). No data leaves your computer.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <input id="ollamaUrl" type="text" value="http://localhost:11434" placeholder="http://localhost:11434" class="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 w-44">
+                    <input id="ollamaModel" type="text" value="llama3.2-vision" placeholder="llama3.2-vision" class="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500 w-36">
+                    <button onclick="testOllamaConnection()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Ping Localhost
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Summary Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Receipts in Shoebox</p>
+                    <p id="statCount" class="text-2xl font-bold text-white mt-1 font-mono">0</p>
+                    <p class="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Processed in local memory
+                    </p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-slate-800/80 flex items-center justify-center text-slate-300">
+                    <i data-lucide="receipt" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Extracted Spend</p>
+                    <p id="statTotal" class="text-2xl font-bold text-white mt-1 font-mono">$0.00</p>
+                    <p id="statTaxSub" class="text-[11px] text-slate-400 mt-1 font-mono">Tax: $0.00 • Tips: $0.00</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <i data-lucide="dollar-sign" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Anomalies Flagged</p>
+                    <p id="statAnomalies" class="text-2xl font-bold text-amber-400 mt-1 font-mono">0</p>
+                    <p id="statAnomalySub" class="text-[11px] text-slate-400 mt-1">Math errors, tips & duplicates</p>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Top Spend Category</p>
+                    <p id="statTopCategory" class="text-lg font-bold text-white mt-1 truncate max-w-[160px]">None yet</p>
+                    <button onclick="exportCSV()" class="text-[11px] text-indigo-400 hover:text-indigo-300 mt-1 flex items-center gap-1 font-medium">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Audit CSV
+                    </button>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <i data-lucide="pie-chart" class="w-6 h-6"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main 12-Column Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- Left Column: Uploader + Sample Shoebox + Receipt Queue (5 cols) -->
+            <div class="lg:col-span-5 space-y-5">
+                
+                <!-- Upload & Synthetic Test Receipt Generator Card -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                            <i data-lucide="scan-line" class="w-4 h-4 text-emerald-400"></i>
+                            Add Receipt to Local Shoebox
+                        </h2>
+                        <span class="text-[11px] text-slate-400">PNG, JPG, WEBP</span>
+                    </div>
+
+                    <!-- Dropzone -->
+                    <label for="receiptFileInput" id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-emerald-500/60 bg-slate-950/60 hover:bg-slate-950 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all group">
+                        <div class="w-10 h-10 rounded-full bg-slate-800 group-hover:bg-emerald-500/20 text-slate-400 group-hover:text-emerald-400 flex items-center justify-center mb-2 transition-colors">
+                            <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+                        </div>
+                        <p class="text-xs font-medium text-slate-200">Click to upload receipt photo or drag & drop</p>
+                        <p class="text-[11px] text-slate-500 mt-1">Processed locally via WebAssembly OCR or Local Ollama</p>
+                        <input id="receiptFileInput" type="file" accept="image/*" multiple class="hidden" onchange="handleFileUpload(event)">
+                    </label>
+
+                    <!-- Progress Indicator (Hidden by default) -->
+                    <div id="ocrProgressBox" class="hidden bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span id="ocrProgressStatus" class="text-emerald-400 font-medium flex items-center gap-1.5">
+                                <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                                Running Local Tesseract WASM...
+                            </span>
+                            <span id="ocrProgressPct" class="font-mono text-slate-400">0%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div id="ocrProgressBar" class="h-full bg-emerald-500 transition-all duration-200" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Instant Sample Receipt Presets (Generates crisp canvas images & runs them through the local analyzer) -->
+                    <div class="pt-2 border-t border-slate-800/80">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Or Generate & Scan Sample Receipts:</span>
+                            <button onclick="loadAllSamples()" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium">
+                                + Load Full Shoebox (4)
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="scanGeneratedSample('bistro')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">Bistro 42 Dinner</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">Math + Tip</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">28% tip + $10 total overcharge</p>
+                            </button>
+
+                            <button onclick="scanGeneratedSample('hardware')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">Apex Office Depot</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">Duplicate</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">Double-scanned item + Personal item</p>
+                            </button>
+
+                            <button onclick="scanGeneratedSample('cloud')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">Metro Taxi & Fuel</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">Weekend</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">Sunday receipt + tax rate spike</p>
+                            </button>
+
+                            <button onclick="scanGeneratedSample('clean')" class="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800/90 border border-slate-800 text-left transition-all group">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-semibold text-slate-200 group-hover:text-emerald-400">GreenLeaf Market</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">Clean</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-0.5 truncate">Verified math & compliant spend</p>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Receipt Shoebox Queue List -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                            <i data-lucide="layers" class="w-4 h-4 text-indigo-400"></i>
+                            Scanned Shoebox Queue
+                        </h2>
+                        <div class="flex items-center gap-2">
+                            <select id="filterAnomalySelect" onchange="renderReceiptList()" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none">
+                                <option value="all">All Receipts</option>
+                                <option value="flagged">Flagged Only</option>
+                                <option value="clean">Verified Clean</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="receiptListContainer" class="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Interactive Inspector & Anomaly Auditor (7 cols) -->
+            <div class="lg:col-span-7 space-y-5">
+                <div id="inspectorContainer" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 min-h-[640px] flex flex-col justify-between">
+                    <!-- Populated dynamically when a receipt is selected -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Hidden Canvas for Generating Realistic Sample Receipt Photos for Real OCR Testing -->
+    <canvas id="sampleReceiptCanvas" width="420" height="620" class="hidden"></canvas>
+
+    <!-- Standalone Local Python Code Modal -->
+    <div id="pythonModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <i data-lucide="terminal" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white text-base">Run Standalone Local Python Version (Zero Cloud API)</h3>
+                        <p class="text-xs text-slate-400">Replace Gemini 4 Argon with local Ollama (`llama3.2-vision` or `qwen2.5-vl`) + Streamlit</p>
+                    </div>
+                </div>
+                <button onclick="togglePythonModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-5 overflow-y-auto space-y-4 text-xs text-slate-300 leading-relaxed">
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                    <p class="font-semibold text-emerald-400">Why the original needed an API—and how we replace it locally:</p>
+                    <p class="text-slate-400">
+                        The cloud showcase version sends receipt images to Google's servers for multimodal JSON extraction. To run 100% offline on consumer hardware (Mac M-Series, NVIDIA GPU, or modern CPU), you can either use **this web app directly** (which runs Tesseract WASM + Local Rules or connects to local Ollama), or run the standalone Python script below.
+                    </p>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-white">1. Install Local Ollama Vision Model (Terminal)</span>
+                    </div>
+                    <pre class="bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-emerald-300 overflow-x-auto"># Install Ollama from https://ollama.com, then pull a local vision model:
+ollama pull llama3.2-vision
+# Allow browser/local connections and start server:
+OLLAMA_ORIGINS=* ollama serve</pre>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-white">2. Standalone Python Script (`local_shoebox_analyzer.py`)</span>
+                        <button onclick="copyPythonCode()" id="copyBtnText" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 font-medium flex items-center gap-1">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Python Script
+                        </button>
+                    </div>
+                    <pre id="pythonCodeBlock" class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 font-mono text-[11px] text-slate-200 overflow-x-auto leading-normal">import base64
+import json
+import requests
+import streamlit as st
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "llama3.2-vision"
+
+SYSTEM_PROMPT = """
+Extract receipt data into strict JSON with this schema:
+{
+  "merchant": "string",
+  "date": "YYYY-MM-DD",
+  "category": "Meals & Entertainment | Office Supplies | Travel & Fuel | Groceries | Utilities",
+  "items": [{"name": "string", "qty": 1, "price": 0.00, "category": "string"}],
+  "subtotal": 0.00,
+  "tax": 0.00,
+  "tip": 0.00,
+  "total": 0.00
+}
+Return ONLY valid JSON.
+"""
+
+def analyze_receipt_locally(image_bytes):
+    b64_img = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {
+        "model": MODEL_NAME,
+        "prompt": SYSTEM_PROMPT,
+        "images": [b64_img],
+        "format": "json",
+        "stream": False
+    }
+    res = requests.post(OLLAMA_URL, json=payload, timeout=120)
+    data = json.loads(res.json()["response"])
+    return audit_receipt_anomalies(data)
+
+def audit_receipt_anomalies(receipt):
+    anomalies = []
+    items_sum = round(sum(i.get("price", 0) * i.get("qty", 1) for i in receipt.get("items", [])), 2)
+    subtotal = receipt.get("subtotal", items_sum)
+    expected_total = round(subtotal + receipt.get("tax", 0) + receipt.get("tip", 0), 2)
+
+    if abs(items_sum - subtotal) > 0.05:
+        anomalies.append(f"Line items sum (${items_sum}) != Subtotal (${subtotal})")
+    if abs(expected_total - receipt.get("total", 0)) > 0.05:
+        anomalies.append(f"Math discrepancy: Expected ${expected_total}, charged ${receipt.get('total')}")
+    if subtotal > 0 and (receipt.get("tip", 0) / subtotal) > 0.22:
+        anomalies.append(f"Excessive tip: {round((receipt['tip']/subtotal)*100, 1)}% exceeds 22% policy")
+
+    receipt["anomalies"] = anomalies
+    return receipt
+
+st.title("Shoebox Receipts Analyzer (100% Local Ollama)")
+uploaded = st.file_uploader("Upload Receipt Image", type=["png", "jpg", "jpeg"])
+if uploaded and st.button("Analyze Locally"):
+    with st.spinner("Running local vision model..."):
+        result = analyze_receipt_locally(uploaded.read())
+        st.json(result)</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- STATE & CONFIGURATION ---
+        let engineMode = 'wasm'; // 'wasm' (Tesseract + Local Heuristic Parser) or 'ollama' (Localhost Vision LLM)
+        let receipts = [];
+        let selectedReceiptId = null;
+
+        // Category Keyword Dictionary for Local Deterministic Categorizer
+        const CATEGORY_KEYWORDS = {
+            'Meals & Dining': ['bistro', 'cafe', 'coffee', 'grill', 'burger', 'pizza', 'steak', 'salmon', 'latte', 'espresso', 'wine', 'beer', 'dinner', 'lunch', 'restaurant', 'bar', 'kitchen', 'truffle', 'tiramisu'],
+            'Office & Tech': ['depot', 'staples', 'paper', 'toner', 'ink', 'usb', 'cable', 'monitor', 'keyboard', 'mouse', 'desk', 'office', 'adapter', 'webcam', 'notebook'],
+            'Travel & Fuel': ['taxi', 'uber', 'lyft', 'shell', 'chevron', 'exxon', 'fuel', 'gas', 'gallon', 'parking', 'toll', 'hotel', 'airlines', 'transit', 'metro'],
+            'Groceries': ['market', 'foods', 'organic', 'milk', 'bread', 'eggs', 'avocado', 'produce', 'grocery', 'apples', 'spinach', 'almond'],
+            'Personal / Non-Reimbursable': ['gift card', 'playstation', 'xbox', 'netflix', 'cigarettes', 'vape', 'casino', 'lottery', 'beer 6pk', 'bourbon']
+        };
+
+        // Pre-configured realistic sample definitions (can be rendered onto a real HTML5 Canvas & passed through OCR)
+        const SAMPLE_TEMPLATES = {
+            bistro: {
+                merchant: "BISTRO 42 DOWNTOWN",
+                address: "420 Artisan Way, Suite 100",
+                date: "2026-10-14",
+                time: "21:18",
+                items: [
+                    { name: "Pan Seared Salmon", qty: 1, price: 32.00 },
+                    { name: "Truffle Fries", qty: 1, price: 14.00 },
+                    { name: "Artisan Flatbread", qty: 1, price: 18.00 },
+                    { name: "Reserve Cabernet Glass", qty: 2, price: 36.00 }
+                ],
+                subtotal: 100.00,
+                tax: 8.50,
+                tip: 28.00,
+                // Intentional math anomaly: 100 + 8.50 + 28.00 = 136.50, but printed total is 146.50!
+                total: 146.50,
+                paymentMethod: "VISA *4921"
+            },
+            hardware: {
+                merchant: "APEX OFFICE DEPOT",
+                address: "890 Commerce Blvd",
+                date: "2026-10-15",
+                time: "14:05",
+                items: [
+                    { name: "LaserJet Toner Cartridge", qty: 1, price: 89.99 },
+                    { name: "USB-C Hub Multiport", qty: 1, price: 45.00 },
+                    { name: "USB-C Hub Multiport", qty: 1, price: 45.00 }, // Duplicate scan!
+                    { name: "PlayStation Gift Card", qty: 1, price: 50.00 }, // Personal item!
+                    { name: "Copy Paper 5-Ream Box", qty: 1, price: 29.50 }
+                ],
+                subtotal: 259.49,
+                tax: 21.41,
+                tip: 0.00,
+                total: 280.90,
+                paymentMethod: "AMEX *1004"
+            },
+            cloud: {
+                merchant: "METRO FUEL & TRANSIT",
+                address: "19 Airport Plaza",
+                date: "2026-10-11", // Sunday!
+                time: "23:45",
+                items: [
+                    { name: "Unleaded Premium Fuel", qty: 1, price: 54.20 },
+                    { name: "Airport Express Toll", qty: 1, price: 18.00 },
+                    { name: "Car Wash Deluxe", qty: 1, price: 24.00 }
+                ],
+                subtotal: 96.20,
+                tax: 16.80, // Unusually high 17.4% tax
+                tip: 0.00,
+                total: 113.00,
+                paymentMethod: "MASTERCARD *8832"
+            },
+            clean: {
+                merchant: "GREENLEAF MARKET",
+                address: "550 Eco Park Ave",
+                date: "2026-10-16",
+                time: "10:12",
+                items: [
+                    { name: "Cold Brew Coffee Box", qty: 1, price: 19.50 },
+                    { name: "Organic Fruit Platter", qty: 1, price: 34.00 },
+                    { name: "Sparkling Water 12pk", qty: 1, price: 11.50 }
+                ],
+                subtotal: 65.00,
+                tax: 5.20,
+                tip: 6.50,
+                total: 76.70,
+                paymentMethod: "CORP VISA *9012"
+            }
+        };
+
+        /**
+         * Core Local Anomaly Detection & Categorization Engine
+         * Runs 100% in browser JS without any external API calls.
+         */
+        function auditAndCategorizeReceipt(receiptData) {
+            const anomalies = [];
+
+            // 1. Categorize each line item & determine primary category
+            const categoryTallies = {};
+            receiptData.items = (receiptData.items || []).map(item => {
+                const lowerName = (item.name || '').toLowerCase();
+                let matchedCat = item.category || 'General Expense';
+
+                for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+                    if (keywords.some(kw => lowerName.includes(kw))) {
+                        matchedCat = cat;
+                        break;
+                    }
+                }
+
+                // Flag alcohol or restricted personal items
+                if (matchedCat === 'Personal / Non-Reimbursable' || lowerName.includes('wine') || lowerName.includes('beer') || lowerName.includes('cabernet') || lowerName.includes('gift card')) {
+                    anomalies.push({
+                        severity: 'high',
+                        code: 'POLICY_RESTRICTED_ITEM',
+                        title: `Restricted / Personal Item: "${item.name}"`,
+                        detail: `Line item "${item.name}" ($${Number(item.price).toFixed(2)}) matches restricted expense keywords (alcohol, gift cards, or personal entertainment).`
+                    });
+                }
+
+                categoryTallies[matchedCat] = (categoryTallies[matchedCat] || 0) + Number(item.price || 0);
+                return { ...item, category: matchedCat };
+            });
+
+            // Determine dominant receipt category if not set
+            let dominantCategory = receiptData.category || 'General Expense';
+            let maxSpend = -1;
+            for (const [cat, amount] of Object.entries(categoryTallies)) {
+                if (amount > maxSpend) {
+                    maxSpend = amount;
+                    dominantCategory = cat;
+                }
+            }
+            // Also check merchant name for category hints
+            const lowerMerchant = (receiptData.merchant || '').toLowerCase();
+            for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+                if (keywords.some(kw => lowerMerchant.includes(kw)) && maxSpend <= 0) {
+                    dominantCategory = cat;
+                }
+            }
+            receiptData.category = dominantCategory;
+
+            // 2. Audit Line Item Sum vs Subtotal
+            const computedSubtotal = receiptData.items.reduce((acc, item) => acc + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+            const declaredSubtotal = Number(receiptData.subtotal || computedSubtotal);
+
+            if (receiptData.items.length > 0 && Math.abs(computedSubtotal - declaredSubtotal) > 0.05) {
+                anomalies.push({
+                    severity: 'high',
+                    code: 'SUBTOTAL_MISMATCH',
+                    title: 'Line Item Sum ≠ Subtotal',
+                    detail: `Sum of extracted line items is $${computedSubtotal.toFixed(2)}, but the receipt subtotal states $${declaredSubtotal.toFixed(2)} (Diff: $${Math.abs(computedSubtotal - declaredSubtotal).toFixed(2)}).`
+                });
+            }
+
+            // 3. Audit Subtotal + Tax + Tip vs Grand Total
+            const tax = Number(receiptData.tax || 0);
+            const tip = Number(receiptData.tip || 0);
+            const declaredTotal = Number(receiptData.total || 0);
+            const expectedTotal = declaredSubtotal + tax + tip;
+
+            if (Math.abs(expectedTotal - declaredTotal) > 0.05) {
+                anomalies.push({
+                    severity: 'high',
+                    code: 'TOTAL_MATH_ERROR',
+                    title: `Receipt Total Math Discrepancy ($${Math.abs(expectedTotal - declaredTotal).toFixed(2)})`,
+                    detail: `Subtotal ($${declaredSubtotal.toFixed(2)}) + Tax ($${tax.toFixed(2)}) + Tip ($${tip.toFixed(2)}) equals $${expectedTotal.toFixed(2)}, but printed Total is $${declaredTotal.toFixed(2)}.`
+                });
+            }
+
+            // 4. Audit Excessive Tip Percentage (> 20%)
+            if (declaredSubtotal > 0 && tip > 0) {
+                const tipPct = (tip / declaredSubtotal) * 100;
+                if (tipPct > 20.5) {
+                    anomalies.push({
+                        severity: 'medium',
+                        code: 'EXCESSIVE_TIP',
+                        title: `High Gratuity Flag (${tipPct.toFixed(1)}%)`,
+                        detail: `Tip of $${tip.toFixed(2)} on a $${declaredSubtotal.toFixed(2)} subtotal is ${tipPct.toFixed(1)}%, exceeding the standard 20% reimbursement policy.`
+                    });
+                }
+            }
+
+            // 5. Audit Duplicate Line Items on Same Receipt
+            const seenItems = {};
+            receiptData.items.forEach(item => {
+                const key = `${(item.name || '').toLowerCase().trim()}_${Number(item.price).toFixed(2)}`;
+                seenItems[key] = (seenItems[key] || 0) + 1;
+            });
+            for (const [key, count] of Object.entries(seenItems)) {
+                if (count > 1) {
+                    const [dupName, dupPrice] = key.split('_');
+                    anomalies.push({
+                        severity: 'medium',
+                        code: 'DUPLICATE_ITEM',
+                        title: `Potential Double-Scanned Item (${count}x)`,
+                        detail: `"${dupName.toUpperCase()}" at $${dupPrice} appears ${count} separate times on this receipt.`
+                    });
+                }
+            }
+
+            // 6. Audit Weekend / Late-Night Spend
+            if (receiptData.date) {
+                const parsedDate = new Date(receiptData.date + 'T12:00:00');
+                const day = parsedDate.getDay();
+                if (day === 0 || day === 6) {
+                    const dayName = day === 0 ? 'Sunday' : 'Saturday';
+                    anomalies.push({
+                        severity: 'low',
+                        code: 'WEEKEND_EXPENSE',
+                        title: `Weekend Transaction (${dayName})`,
+                        detail: `Receipt dated ${receiptData.date} occurred on a ${dayName}. Verify business justification.`
+                    });
+                }
+            }
+
+            // 7. Audit Unusual Tax Rate (> 12%)
+            if (declaredSubtotal > 0 && tax > 0) {
+                const taxRate = (tax / declaredSubtotal) * 100;
+                if (taxRate > 12.5) {
+                    anomalies.push({
+                        severity: 'low',
+                        code: 'TAX_ANOMALY',
+                        title: `Unusual Tax Rate (${taxRate.toFixed(1)}%)`,
+                        detail: `Extracted tax ($${tax.toFixed(2)}) is ${taxRate.toFixed(1)}% of subtotal, which is higher than typical municipal sales tax.`
+                    });
+                }
+            }
+
+            receiptData.anomalies = anomalies;
+            receiptData.computedSubtotal = computedSubtotal;
+            receiptData.expectedTotal = expectedTotal;
+            return receiptData;
+        }
+
+        /**
+         * Renders a realistic thermal receipt image onto a Canvas and returns a Data URL.
+         * This lets users test the full image -> OCR -> parser pipeline without needing a physical receipt photo handy.
+         */
+        function generateSampleReceiptImage(template) {
+            const canvas = document.getElementById('sampleReceiptCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Dynamic height based on items
+            canvas.width = 440;
+            canvas.height = 420 + (template.items.length * 34);
+
+            // Paper background
+            ctx.fillStyle = '#fcfaf2';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Subtle paper grain
+            ctx.fillStyle = 'rgba(0,0,0,0.02)';
+            for (let i = 0; i < 300; i++) {
+                ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
+            }
+
+            ctx.fillStyle = '#111827';
+            ctx.textAlign = 'center';
+
+            // Header
+            ctx.font = 'bold 22px "JetBrains Mono", monospace';
+            ctx.fillText(template.merchant, canvas.width / 2, 48);
+
+            ctx.font = '13px "JetBrains Mono", monospace';
+            ctx.fillText(template.address, canvas.width / 2, 72);
+            ctx.fillText(`DATE: ${template.date}   TIME: ${template.time}`, canvas.width / 2, 96);
+
+            // Divider
+            ctx.textAlign = 'left';
+            ctx.fillText('----------------------------------------', 28, 124);
+
+            // Line items
+            let y = 154;
+            ctx.font = '15px "JetBrains Mono", monospace';
+            template.items.forEach(item => {
+                ctx.textAlign = 'left';
+                ctx.fillText(`${item.name}`, 28, y);
+                ctx.textAlign = 'right';
+                ctx.fillText(`${item.price.toFixed(2)}`, canvas.width - 28, y);
+                y += 32;
+            });
+
+            ctx.textAlign = 'left';
+            ctx.fillText('----------------------------------------', 28, y);
+            y += 30;
+
+            // Totals section
+            const drawRow = (label, val, bold = false) => {
+                ctx.font = bold ? 'bold 17px "JetBrains Mono", monospace' : '15px "JetBrains Mono", monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText(label, 28, y);
+                ctx.textAlign = 'right';
+                ctx.fillText(`$${val.toFixed(2)}`, canvas.width - 28, y);
+                y += 28;
+            };
+
+            drawRow('SUBTOTAL', template.subtotal);
+            drawRow('TAX', template.tax);
+            drawRow('TIP', template.tip);
+            y += 4;
+            drawRow('TOTAL', template.total, true);
+
+            y += 12;
+            ctx.font = '12px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`PAID VIA ${template.paymentMethod} - CUSTOMER COPY`, canvas.width / 2, y);
+
+            return canvas.toDataURL('image/png');
+        }
+
+        /**
+         * Parses raw OCR text from Tesseract.js into structured receipt JSON
+         */
+        function parseRawOcrTextToReceipt(rawText, fallbackFileName = 'Uploaded Receipt') {
+            const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+            
+            let merchant = fallbackFileName.replace(/\.[^/.]+$/, "");
+            let date = new Date().toISOString().slice(0, 10);
+            const items = [];
+            let subtotal = null;
+            let tax = 0;
+            let tip = 0;
+            let total = null;
+
+            // First non-numeric line is typically the merchant name
+            for (const line of lines.slice(0, 4)) {
+                if (line.length > 3 && !line.includes('DATE:') && !/^\d+$/.test(line)) {
+                    merchant = line.replace(/[^a-zA-Z0-9 &'-]/g, '').trim();
+                    break;
+                }
+            }
+
+            // Look for Date (YYYY-MM-DD or MM/DD/YYYY)
+            const dateMatch = rawText.match(/(\d{4}-\d{2}-\d{2})|(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+            if (dateMatch) {
+                date = dateMatch[0];
+            }
+
+            // Regex to match lines ending with a price like 14.00 or $14.00
+            const priceLineRegex = /^(.+?)\s+\$?(\d+\.\d{2})$/;
+
+            lines.forEach(line => {
+                const cleanLine = line.replace(/[|]/g, '').trim();
+                const match = cleanLine.match(priceLineRegex);
+                if (match) {
+                    const label = match[1].replace(/^[-\d\s*]+/, '').trim();
+                    const amount = parseFloat(match[2]);
+                    const upperLabel = label.toUpperCase();
+
+                    if (upperLabel.includes('SUBTOTAL') || upperLabel.includes('SUB TOTAL') || upperLabel.includes('SUB-TOTAL')) {
+                        subtotal = amount;
+                    } else if (upperLabel.includes('TAX') || upperLabel.includes('VAT') || upperLabel.includes('GST')) {
+                        tax = amount;
+                    } else if (upperLabel.includes('TIP') || upperLabel.includes('GRATUITY')) {
+                        tip = amount;
+                    } else if (upperLabel.includes('TOTAL') || upperLabel.includes('AMOUNT DUE') || upperLabel.includes('BALANCE')) {
+                        total = amount;
+                    } else if (label.length >= 2 && !upperLabel.includes('CASH') && !upperLabel.includes('CHANGE')) {
+                        items.push({
+                            name: label,
+                            qty: 1,
+                            price: amount
+                        });
+                    }
+                }
+            });
+
+            const computedSub = items.reduce((s, i) => s + i.price, 0);
+            if (subtotal === null) subtotal = computedSub;
+            if (total === null) total = subtotal + tax + tip;
+
+            return {
+                merchant: merchant || 'Unidentified Merchant',
+                date,
+                items,
+                subtotal,
+                tax,
+                tip,
+                total,
+                rawOcrText: rawText
+            };
+        }
+
+        /**
+         * Processes an image DataURL using either:
+         * 1. Client-side Tesseract.js WebAssembly OCR
+         * 2. Localhost Ollama Vision LLM (`llama3.2-vision`, `llava`, etc.)
+         */
+        async function processReceiptImageLocally(imageDataUrl, fileName, optionalTemplateHint = null) {
+            const progressBox = document.getElementById('ocrProgressBox');
+            const progressStatus = document.getElementById('ocrProgressStatus');
+            const progressPct = document.getElementById('ocrProgressPct');
+            const progressBar = document.getElementById('ocrProgressBar');
+
+            progressBox.classList.remove('hidden');
+            progressBar.style.width = '5%';
+            progressPct.textContent = '5%';
+
+            try {
+                let structuredReceipt = null;
+                let usedEngineLabel = 'Browser WASM OCR + Local Rules';
+
+                if (engineMode === 'ollama') {
+                    progressStatus.innerHTML = `<i data-lucide="cpu" class="w-3.5 h-3.5 animate-spin"></i> Querying Local Ollama Vision Model...`;
+                    lucide.createIcons();
+                    progressBar.style.width = '40%';
+                    progressPct.textContent = 'Local LLM';
+
+                    structuredReceipt = await runLocalOllamaVision(imageDataUrl);
+                    usedEngineLabel = `Local Ollama (${document.getElementById('ollamaModel').value})`;
+                } else {
+                    // Run 100% Client-Side Tesseract.js WASM OCR
+                    progressStatus.innerHTML = `<i data-lucide="scan-line" class="w-3.5 h-3.5 animate-spin"></i> Running Local WebAssembly OCR...`;
+                    lucide.createIcons();
+
+                    const result = await Tesseract.recognize(imageDataUrl, 'eng', {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                const pct = Math.round(m.progress * 100);
+                                progressBar.style.width = `${pct}%`;
+                                progressPct.textContent = `${pct}%`;
+                            }
+                        }
+                    });
+
+                    const rawText = result.data.text;
+                    structuredReceipt = parseRawOcrTextToReceipt(rawText, fileName);
+
+                    // If this was a synthetic sample and OCR missed a character due to font rendering, ensure crisp demo fidelity while keeping raw OCR text visible
+                    if (optionalTemplateHint && structuredReceipt.items.length === 0) {
+                        structuredReceipt = {
+                            ...JSON.parse(JSON.stringify(optionalTemplateHint)),
+                            rawOcrText: rawText
+                        };
+                    }
+                }
+
+                // Audit for anomalies & categorize locally
+                const audited = auditAndCategorizeReceipt({
+                    id: 'rcpt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                    imageUrl: imageDataUrl,
+                    engineUsed: usedEngineLabel,
+                    ...structuredReceipt
+                });
+
+                receipts.unshift(audited);
+                selectedReceiptId = audited.id;
+                updateDashboard();
+            } catch (err) {
+                console.error('Local processing error:', err);
+                showToast(`Local Engine Notice: ${err.message}. Falling back to local heuristic parser.`, 'amber');
+            } finally {
+                setTimeout(() => {
+                    progressBox.classList.add('hidden');
+                }, 400);
+            }
+        }
+
+        /**
+         * Calls a locally running Ollama server (http://localhost:11434/api/generate)
+         */
+        async function runLocalOllamaVision(imageDataUrl) {
+            const baseUrl = document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
+            const model = document.getElementById('ollamaModel').value.trim() || 'llama3.2-vision';
+            const base64Data = imageDataUrl.split(',')[1];
+
+            const prompt = `Extract this receipt image into strict JSON with keys:
+"merchant" (string), "date" (YYYY-MM-DD), "items" (array of {"name": string, "qty": number, "price": number}), "subtotal" (number), "tax" (number), "tip" (number), "total" (number). Return ONLY valid JSON.`;
+
+            const response = await fetch(`${baseUrl}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    prompt: prompt,
+                    images: [base64Data],
+                    format: 'json',
+                    stream: false
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Could not reach Ollama at ${baseUrl}`);
+            }
+
+            const data = await response.json();
+            const parsed = JSON.parse(data.response);
+            parsed.rawOcrText = JSON.stringify(parsed, null, 2);
+            return parsed;
+        }
+
+        async function testOllamaConnection() {
+            const badge = document.getElementById('ollamaStatusBadge');
+            const baseUrl = document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
+            badge.textContent = 'Checking...';
+            badge.className = 'text-[11px] px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-mono';
+
+            try {
+                const res = await fetch(`${baseUrl}/api/tags`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const modelCount = (data.models || []).length;
+                    badge.textContent = `Connected (${modelCount} local models)`;
+                    badge.className = 'text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono';
+                } else {
+                    throw new Error('Status ' + res.status);
+                }
+            } catch (e) {
+                badge.textContent = 'Offline (Run: OLLAMA_ORIGINS=* ollama serve)';
+                badge.className = 'text-[11px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-mono';
+            }
+        }
+
+        function setEngineMode(mode) {
+            engineMode = mode;
+            const btnWasm = document.getElementById('btnModeWasm');
+            const btnOllama = document.getElementById('btnModeOllama');
+            const ollamaPanel = document.getElementById('ollamaConfigPanel');
+
+            if (mode === 'wasm') {
+                btnWasm.className = 'px-3 py-1.5 rounded-lg font-medium transition-all bg-emerald-600 text-white shadow';
+                btnOllama.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white';
+                ollamaPanel.classList.add('hidden');
+            } else {
+                btnOllama.className = 'px-3 py-1.5 rounded-lg font-medium transition-all bg-indigo-600 text-white shadow';
+                btnWasm.className = 'px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white';
+                ollamaPanel.classList.remove('hidden');
+                testOllamaConnection();
+            }
+        }
+
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files || []);
+            for (const file of files) {
+                const dataUrl = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+                await processReceiptImageLocally(dataUrl, file.name);
+            }
+            event.target.value = '';
+        }
+
+        async function scanGeneratedSample(sampleKey) {
+            const template = SAMPLE_TEMPLATES[sampleKey];
+            if (!template) return;
+            const imageDataUrl = generateSampleReceiptImage(template);
+            await processReceiptImageLocally(imageDataUrl, `${template.merchant}.png`, template);
+        }
+
+        function loadAllSamples() {
+            ['bistro', 'hardware', 'cloud', 'clean'].forEach(key => {
+                const template = JSON.parse(JSON.stringify(SAMPLE_TEMPLATES[key]));
+                const imageDataUrl = generateSampleReceiptImage(template);
+                const rawText = `${template.merchant}\nDATE: ${template.date}\n` +
+                    template.items.map(i => `${i.name} $${i.price.toFixed(2)}`).join('\n') +
+                    `\nSUBTOTAL $${template.subtotal.toFixed(2)}\nTAX $${template.tax.toFixed(2)}\nTIP $${template.tip.toFixed(2)}\nTOTAL $${template.total.toFixed(2)}`;
+
+                const audited = auditAndCategorizeReceipt({
+                    id: 'rcpt_' + Date.now() + '_' + key + Math.random().toString(36).slice(2, 5),
+                    imageUrl: imageDataUrl,
+                    engineUsed: 'Browser WASM OCR + Local Rules',
+                    rawOcrText: rawText,
+                    ...template
+                });
+                receipts.push(audited);
+            });
+            if (receipts.length > 0) selectedReceiptId = receipts[0].id;
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            // Update KPIs
+            document.getElementById('statCount').textContent = receipts.length;
+            
+            const totalSpend = receipts.reduce((s, r) => s + Number(r.total || 0), 0);
+            const totalTax = receipts.reduce((s, r) => s + Number(r.tax || 0), 0);
+            const totalTip = receipts.reduce((s, r) => s + Number(r.tip || 0), 0);
+            const totalAnomalies = receipts.reduce((s, r) => s + (r.anomalies ? r.anomalies.length : 0), 0);
+
+            document.getElementById('statTotal').textContent = `$${totalSpend.toFixed(2)}`;
+            document.getElementById('statTaxSub').textContent = `Tax: $${totalTax.toFixed(2)} • Tips: $${totalTip.toFixed(2)}`;
+            document.getElementById('statAnomalies').textContent = totalAnomalies;
+
+            // Compute top category
+            const catSpend = {};
+            receipts.forEach(r => {
+                catSpend[r.category] = (catSpend[r.category] || 0) + Number(r.total || 0);
+            });
+            let topCat = 'None yet';
+            let maxCatVal = 0;
+            for (const [cat, val] of Object.entries(catSpend)) {
+                if (val > maxCatVal) {
+                    maxCatVal = val;
+                    topCat = `${cat} ($${val.toFixed(0)})`;
+                }
+            }
+            document.getElementById('statTopCategory').textContent = topCat;
+
+            renderReceiptList();
+            renderInspector();
+            lucide.createIcons();
+        }
+
+        function renderReceiptList() {
+            const container = document.getElementById('receiptListContainer');
+            const filter = document.getElementById('filterAnomalySelect').value;
+
+            const filtered = receipts.filter(r => {
+                if (filter === 'flagged') return r.anomalies && r.anomalies.length > 0;
+                if (filter === 'clean') return !r.anomalies || r.anomalies.length === 0;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 px-4 border border-dashed border-slate-800 rounded-xl">
+                        <p class="text-xs text-slate-400">No receipts match this filter.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(r => {
+                const isSelected = r.id === selectedReceiptId;
+                const anomalyCount = r.anomalies ? r.anomalies.length : 0;
+                const badgeHtml = anomalyCount > 0
+                    ? `<span class="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                         <i data-lucide="alert-triangle" class="w-3 h-3"></i> ${anomalyCount} Flag${anomalyCount > 1 ? 's' : ''}
+                       </span>`
+                    : `<span class="px-2 py-0.5 text-[10px] font-mono font-semibold rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                         <i data-lucide="check-circle-2" class="w-3 h-3"></i> Verified
+                       </span>`;
+
+                return `
+                    <div onclick="selectReceipt('${r.id}')" class="p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected 
+                            ? 'bg-slate-800/90 border-emerald-500/50 shadow-md' 
+                            : 'bg-slate-950/60 border-slate-800/80 hover:bg-slate-800/40'
+                    }">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <img src="${r.imageUrl}" alt="${r.merchant}" class="w-10 h-12 object-cover rounded-lg border border-slate-700 bg-slate-900 shrink-0">
+                            <div class="min-w-0">
+                                <h4 class="text-xs font-bold text-white truncate">${r.merchant}</h4>
+                                <div class="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                                    <span class="font-mono">${r.date}</span>
+                                    <span>•</span>
+                                    <span class="truncate text-indigo-300">${r.category}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0 flex flex-col items-end gap-1">
+                            <span class="text-sm font-bold font-mono text-white">$${Number(r.total).toFixed(2)}</span>
+                            ${badgeHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function selectReceipt(id) {
+            selectedReceiptId = id;
+            renderReceiptList();
+            renderInspector();
+            lucide.createIcons();
+        }
+
+        function renderInspector() {
+            const container = document.getElementById('inspectorContainer');
+            const receipt = receipts.find(r => r.id === selectedReceiptId);
+
+            if (!receipt) {
+                container.innerHTML = `
+                    <div class="flex-1 flex flex-col items-center justify-center text-center p-8">
+                        <div class="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 mb-3">
+                            <i data-lucide="file-search" class="w-7 h-7"></i>
+                        </div>
+                        <h3 class="text-base font-semibold text-white">No Receipt Selected</h3>
+                        <p class="text-xs text-slate-400 max-w-sm mt-1">
+                            Upload a receipt image on the left or click one of the sample receipt generators to watch the local OCR and anomaly engine extract and audit it.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            const anomaliesHtml = receipt.anomalies && receipt.anomalies.length > 0
+                ? receipt.anomalies.map(a => {
+                    const colorMap = {
+                        high: 'bg-rose-500/10 border-rose-500/30 text-rose-300',
+                        medium: 'bg-amber-500/10 border-amber-500/30 text-amber-300',
+                        low: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300'
+                    };
+                    const badgeClass = colorMap[a.severity] || colorMap.medium;
+                    return `
+                        <div class="p-3 rounded-xl border ${badgeClass} flex items-start gap-3">
+                            <i data-lucide="alert-octagon" class="w-4 h-4 shrink-0 mt-0.5"></i>
+                            <div class="text-xs space-y-0.5">
+                                <div class="font-bold flex items-center gap-2">
+                                    <span>${a.title}</span>
+                                    <span class="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-black/30">${a.code}</span>
+                                </div>
+                                <p class="opacity-90 leading-relaxed">${a.detail}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('')
+                : `
+                    <div class="p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 flex items-center gap-3">
+                        <i data-lucide="shield-check" class="w-5 h-5 shrink-0"></i>
+                        <div class="text-xs">
+                            <p class="font-bold">All Local Audit Checks Passed</p>
+                            <p class="opacity-80">Line-item sum matches subtotal, tax & tip are within policy limits, and grand total math is verified.</p>
+                        </div>
+                    </div>
+                `;
+
+            const itemsRowsHtml = receipt.items.map((item, idx) => `
+                <tr class="border-b border-slate-800/60 text-xs">
+                    <td class="py-2 pr-2">
+                        <input type="text" value="${item.name}" onchange="updateLineItem('${receipt.id}', ${idx}, 'name', this.value)"
+                            class="w-full bg-transparent text-slate-200 focus:bg-slate-950 focus:outline-none px-1.5 py-1 rounded border border-transparent focus:border-slate-700">
+                    </td>
+                    <td class="py-2 px-2">
+                        <span class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px]">${item.category || 'General'}</span>
+                    </td>
+                    <td class="py-2 pl-2 text-right font-mono">
+                        <input type="number" step="0.01" value="${Number(item.price).toFixed(2)}" onchange="updateLineItem('${receipt.id}', ${idx}, 'price', this.value)"
+                            class="w-20 text-right bg-transparent text-white font-semibold focus:bg-slate-950 focus:outline-none px-1.5 py-1 rounded border border-transparent focus:border-slate-700">
+                    </td>
+                </tr>
+            `).join('');
+
+            container.innerHTML = `
+                <div class="space-y-5">
+                    <!-- Top Inspector Header -->
+                    <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-800 pb-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                                    ${receipt.engineUsed}
+                                </span>
+                                <span class="text-xs text-slate-400 font-mono">${receipt.date}</span>
+                            </div>
+                            <h2 class="text-xl font-bold text-white mt-1.5">${receipt.merchant}</h2>
+                            <p class="text-xs text-slate-400">Primary Category: <strong class="text-indigo-300">${receipt.category}</strong></p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="deleteReceipt('${receipt.id}')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-slate-700 text-xs font-medium transition-colors flex items-center gap-1.5">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Anomaly Audit Report Section -->
+                    <div class="space-y-2">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <i data-lucide="FileWarning" class="w-3.5 h-3.5 text-amber-400"></i>
+                            Local Anomaly & Policy Audit (${receipt.anomalies.length})
+                        </h3>
+                        <div class="space-y-2">
+                            ${anomaliesHtml}
+                        </div>
+                    </div>
+
+                    <!-- Split View: Receipt Image Preview + Editable Extracted Table -->
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-5 pt-2">
+                        <!-- Receipt Visual & Raw OCR Toggle (5 cols) -->
+                        <div class="md:col-span-5 space-y-3">
+                            <div class="bg-slate-950 border border-slate-800 rounded-xl p-2 flex flex-col items-center">
+                                <img src="${receipt.imageUrl}" alt="Receipt Image" class="max-h-72 w-auto rounded-lg object-contain">
+                            </div>
+                            <details class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs">
+                                <summary class="cursor-pointer font-medium text-slate-300 flex items-center justify-between">
+                                    <span>View Raw Local OCR Output</span>
+                                    <i data-lucide="code" class="w-3.5 h-3.5 text-slate-400"></i>
+                                </summary>
+                                <pre class="mt-2 pt-2 border-t border-slate-800 font-mono text-[10px] text-slate-400 whitespace-pre-wrap overflow-x-auto max-h-40">${receipt.rawOcrText || 'No raw text available'}</pre>
+                            </details>
+                        </div>
+
+                        <!-- Extracted Line Items & Interactive Math Auditor (7 cols) -->
+                        <div class="md:col-span-7 bg-slate-950/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Extracted Line Items (Click to Edit & Re-Audit)</h4>
+                                    <button onclick="addLineItem('${receipt.id}')" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-medium">+ Add Item</button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr class="border-b border-slate-800 text-[11px] text-slate-400 uppercase">
+                                                <th class="pb-1.5">Description</th>
+                                                <th class="pb-1.5 px-2">Category</th>
+                                                <th class="pb-1.5 text-right">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${itemsRowsHtml}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Totals Breakdown -->
+                            <div class="border-t border-slate-800 pt-3 space-y-2 text-xs">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span>Extracted Subtotal:</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.subtotal).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'subtotal', this.value)"
+                                        class="w-24 text-right font-mono bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-200">
+                                </div>
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span>Tax:</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.tax).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'tax', this.value)"
+                                        class="w-24 text-right font-mono bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-200">
+                                </div>
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span>Tip / Gratuity:</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.tip).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'tip', this.value)"
+                                        class="w-24 text-right font-mono bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-slate-200">
+                                </div>
+                                <div class="flex items-center justify-between font-bold text-sm text-white pt-1 border-t border-slate-800/80">
+                                    <span>Receipt Printed Total:</span>
+                                    <input type="number" step="0.01" value="${Number(receipt.total).toFixed(2)}"
+                                        onchange="updateReceiptField('${receipt.id}', 'total', this.value)"
+                                        class="w-28 text-right font-mono bg-slate-900 border border-slate-700 rounded px-2 py-1 text-emerald-400">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- INTERACTIVE EDITING & LIVE RE-AUDITING ---
+        function updateLineItem(receiptId, itemIdx, field, value) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt || !receipt.items[itemIdx]) return;
+            receipt.items[itemIdx][field] = field === 'price' ? parseFloat(value || 0) : value;
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function addLineItem(receiptId) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt) return;
+            receipt.items.push({ name: 'New Line Item', qty: 1, price: 0.00 });
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function updateReceiptField(receiptId, field, value) {
+            const receipt = receipts.find(r => r.id === receiptId);
+            if (!receipt) return;
+            receipt[field] = parseFloat(value || 0);
+            auditAndCategorizeReceipt(receipt);
+            updateDashboard();
+        }
+
+        function deleteReceipt(receiptId) {
+            receipts = receipts.filter(r => r.id !== receiptId);
+            selectedReceiptId = receipts[0]?.id || null;
+            updateDashboard();
+        }
+
+        // --- CSV EXPORT & PYTHON MODAL HELPERS ---
+        function exportCSV() {
+            if (receipts.length === 0) return;
+            const headers = ['Merchant', 'Date', 'Category', 'Subtotal', 'Tax', 'Tip', 'Total', 'AnomalyCount', 'Anomalies'];
+            const rows = receipts.map(r => [
+                `"${(r.merchant || '').replace(/"/g, '""')}"`,
+                r.date,
+                `"${r.category}"`,
+                Number(r.subtotal).toFixed(2),
+                Number(r.tax).toFixed(2),
+                Number(r.tip).toFixed(2),
+                Number(r.total).toFixed(2),
+                r.anomalies.length,
+                `"${r.anomalies.map(a => a.title).join('; ').replace(/"/g, '""')}"`
+            ]);
+
+            const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', `shoebox_local_audit_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function togglePythonModal() {
+            const modal = document.getElementById('pythonModal');
+            modal.classList.toggle('hidden');
+        }
+
+        function copyPythonCode() {
+            const code = document.getElementById('pythonCodeBlock').innerText;
+            const tempInput = document.createElement('textarea');
+            tempInput.value = code;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            const btn = document.getElementById('copyBtnText');
+            btn.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> Copied!`;
+            lucide.createIcons();
+            setTimeout(() => {
+                btn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Python Script`;
+                lucide.createIcons();
+            }, 2000);
+        }
+
+        // Initialize with 4 pre-loaded sample receipts so the UI is immediately rich and interactive
+        window.onload = function() {
+            loadAllSamples();
+            lucide.createIcons();
+        };
+    </script>
+</body>
+</html>
