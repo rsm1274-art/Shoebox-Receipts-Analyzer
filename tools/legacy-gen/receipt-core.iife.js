@@ -5,6 +5,7 @@ var ReceiptCore = (() => {
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -18,12 +19,14 @@ var ReceiptCore = (() => {
     return to;
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
   // src/core/index.ts
   var index_exports = {};
   __export(index_exports, {
     CAPEX_LINE_THRESHOLD: () => CAPEX_LINE_THRESHOLD,
     CAPEX_THRESHOLD: () => CAPEX_THRESHOLD,
+    ChangeTracker: () => ChangeTracker,
     DEFAULT_COA_ACCOUNTS: () => DEFAULT_COA_ACCOUNTS,
     DEFAULT_FLEET_CLASSES: () => DEFAULT_FLEET_CLASSES,
     DEFAULT_LINE_CATEGORY: () => DEFAULT_LINE_CATEGORY,
@@ -35,10 +38,14 @@ var ReceiptCore = (() => {
     MATH_TOLERANCE: () => MATH_TOLERANCE,
     MIN_WAIVER_NOTE_LENGTH: () => MIN_WAIVER_NOTE_LENGTH,
     PAYMENT_MATCH_DEFAULTS: () => PAYMENT_MATCH_DEFAULTS,
+    SESSION_SCHEMA: () => SESSION_SCHEMA,
     STATUSES: () => STATUSES,
+    TRACKED_LINE_FIELDS: () => TRACKED_LINE_FIELDS,
+    TRACKED_RECEIPT_FIELDS: () => TRACKED_RECEIPT_FIELDS,
     acceptFlag: () => acceptFlag,
     appendLogEntries: () => appendLogEntries,
     appendLogEntry: () => appendLogEntry,
+    applyWorkflowEffects: () => applyWorkflowEffects,
     approvalBlockers: () => approvalBlockers,
     auditAndCategorizeReceipt: () => auditAndCategorizeReceipt,
     bankFeedFileName: () => bankFeedFileName,
@@ -47,6 +54,8 @@ var ReceiptCore = (() => {
     buildQboWebConnect: () => buildQboWebConnect,
     buildSplitCsv: () => buildSplitCsv,
     computeProRataSplits: () => computeProRataSplits,
+    correctionRevision: () => correctionRevision,
+    createBatch: () => createBatch,
     defaultContext: () => defaultContext,
     defaultFleetClass: () => defaultFleetClass,
     escapeCsvCell: () => escapeCsvCell,
@@ -62,7 +71,11 @@ var ReceiptCore = (() => {
     isFlagResolved: () => isFlagResolved,
     isIsoDate: () => isIsoDate,
     mapPaymentMethodToAccount: () => mapPaymentMethodToAccount,
+    migrateSession: () => migrateSession,
+    nextBatchId: () => nextBatchId,
     parseRawOcrTextToReceipt: () => parseRawOcrTextToReceipt,
+    qboFitId: () => qboFitId,
+    reopenReceipt: () => reopenReceipt,
     sha256Hex: () => sha256Hex,
     splitCsvFileName: () => splitCsvFileName,
     stableStringify: () => stableStringify,
@@ -481,13 +494,22 @@ var ReceiptCore = (() => {
     const str = String(val ?? "");
     return `"${str.replace(/"/g, '""')}"`;
   }
+  function correctionRevision(receipt) {
+    return Number(receipt.revision) || 0;
+  }
+  function qboFitId(receipt) {
+    const rev = correctionRevision(receipt);
+    return rev > 0 ? `${receipt.id}-r${rev}` : receipt.id;
+  }
   function buildQboBankMemo(receipt) {
+    const rev = correctionRevision(receipt);
+    const correctionPrefix = rev > 0 ? `CORRECTION r${rev} | ` : "";
     const splits = receipt.qboSplits || [];
     const splitHint = splits.length > 1 ? `[SPLIT: ${splits.map((s) => `${s.category.split(":")[0]} $${s.qboSplitAmount.toFixed(2)}`).join(" / ")}]` : `[${receipt.category}]`;
     const vanShort = (receipt.vanClass || "General").split(" - ")[0];
     const fuelStr = receipt.fuelMeta ? ` | ${receipt.fuelMeta}` : "";
     const itemsSummary = (receipt.items || []).map((i) => i.name).slice(0, 3).join(", ");
-    return `${receipt.merchant} | ${splitHint} | ${vanShort}${fuelStr} | ${itemsSummary}`;
+    return `${correctionPrefix}${receipt.merchant} | ${splitHint} | ${vanShort}${fuelStr} | ${itemsSummary}`;
   }
   function exportableReceipts(receipts, excludeMathErrors) {
     if (!excludeMathErrors) return receipts;
@@ -504,7 +526,8 @@ var ReceiptCore = (() => {
     ]);
     return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   }
-  var bankFeedFileName = (now) => `QBO_BankFeed_4Col_${isoDay(now)}.csv`;
+  var batchSuffix = (batchId) => batchId ? `_${batchId}` : "";
+  var bankFeedFileName = (now, batchId) => `QBO_BankFeed_4Col_${isoDay(now)}${batchSuffix(batchId)}.csv`;
   function buildSplitCsv(list) {
     const headers = [
       "ReceiptRefID",
@@ -522,7 +545,9 @@ var ReceiptCore = (() => {
     list.forEach((r) => {
       const auditFlags = (r.anomalies || []).map((a) => a.code).join("; ") || "CLEAN";
       (r.qboSplits || []).forEach((sp) => {
-        const memo = sp.itemNames.join("; ") + (r.fuelMeta ? ` [${r.fuelMeta}]` : "");
+        const rev = correctionRevision(r);
+        const correctionPrefix = rev > 0 ? `CORRECTION r${rev}: ` : "";
+        const memo = correctionPrefix + sp.itemNames.join("; ") + (r.fuelMeta ? ` [${r.fuelMeta}]` : "");
         rows.push([
           escapeCsvCell(r.id),
           formatDateForQBO(r.date),
@@ -539,7 +564,7 @@ var ReceiptCore = (() => {
     });
     return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   }
-  var splitCsvFileName = (now) => `QBO_Detailed_Splits_${isoDay(now)}.csv`;
+  var splitCsvFileName = (now, batchId) => `QBO_Detailed_Splits_${isoDay(now)}${batchSuffix(batchId)}.csv`;
   function buildQboWebConnect(list, now) {
     const nowStamp = now.toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
     const trnBlocks = list.map((r) => {
@@ -551,7 +576,7 @@ var ReceiptCore = (() => {
 <TRNTYPE>DEBIT
 <DTPOSTED>${dtPosted}
 <TRNAMT>-${Number(r.total || 0).toFixed(2)}
-<FITID>${r.id}
+<FITID>${qboFitId(r)}
 <NAME>${cleanName}
 <MEMO>${cleanMemo}
 </STMTTRN>`;
@@ -592,7 +617,7 @@ ${trnBlocks}
 </CREDITCARDMSGSRSV1>
 </OFX>`;
   }
-  var webConnectFileName = (now) => `ReceiptAudit_${isoDay(now)}.qbo`;
+  var webConnectFileName = (now, batchId) => `ReceiptAudit_${isoDay(now)}${batchSuffix(batchId)}.qbo`;
 
   // src/core/sha256.ts
   var K = new Uint32Array([
@@ -750,11 +775,11 @@ ${trnBlocks}
       e.prev
     ]));
   }
-  function appendLogEntry(log, draft) {
+  function appendLogEntry(log, draft2) {
     const last = log[log.length - 1];
     const seq = last ? last.seq + 1 : 1;
     const prev = last ? last.hash : GENESIS_HASH;
-    const withoutHash = { ...draft, seq, prev };
+    const withoutHash = { ...draft2, seq, prev };
     return [...log, { ...withoutHash, hash: hashEntry(withoutHash) }];
   }
   function appendLogEntries(log, drafts) {
@@ -839,6 +864,317 @@ ${trnBlocks}
       if (!isFlagResolved(receipt, a)) blockers.push(`Unresolved High flag: ${a.title}`);
     }
     return blockers;
+  }
+
+  // src/core/tracker.ts
+  var TRACKED_RECEIPT_FIELDS = [
+    "merchant",
+    "date",
+    "paidFromAccount",
+    "vanClass",
+    "expensePhase",
+    "subtotal",
+    "tax",
+    "tip",
+    "total"
+  ];
+  var TRACKED_LINE_FIELDS = ["name", "qty", "price", "category", "manualCategory"];
+  var norm = (v) => v === void 0 ? null : v;
+  var same = (a, b) => a === b;
+  var pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, norm(obj[k])]));
+  var lineKey = (l) => `${l.name}|${l.qty}|${l.price}`;
+  function snapshotOf(r) {
+    return {
+      fields: pick(r, TRACKED_RECEIPT_FIELDS),
+      lines: (r.items || []).map((item) => pick(item, TRACKED_LINE_FIELDS))
+    };
+  }
+  function draft(opts, action, receiptId, extra = {}) {
+    return {
+      at: opts.at,
+      actor: opts.actor,
+      action,
+      receiptId,
+      batchId: null,
+      field: null,
+      line: null,
+      from: null,
+      to: null,
+      note: null,
+      ...extra
+    };
+  }
+  function findRemovalIndex(longer, shorter) {
+    for (const key of [lineKey, (l) => String(l.name)]) {
+      const target = shorter.map(key).join("\n");
+      for (let j = 0; j < longer.length; j++) {
+        const without = longer.filter((_, i) => i !== j).map(key).join("\n");
+        if (without === target) return j;
+      }
+    }
+    return -1;
+  }
+  function diffLineFields(receiptId, prev, next, line, opts) {
+    const out = [];
+    for (const f of TRACKED_LINE_FIELDS) {
+      if (same(prev[f], next[f])) continue;
+      const note = f === "category" ? next.manualCategory ? "manual" : "auto" : null;
+      out.push(draft(opts, "field.changed", receiptId, { field: f, line, from: prev[f], to: next[f], note }));
+    }
+    return out;
+  }
+  function diffReceipt(receiptId, prev, next, opts) {
+    const out = [];
+    for (const f of TRACKED_RECEIPT_FIELDS) {
+      if (!same(prev.fields[f], next.fields[f])) {
+        out.push(draft(opts, "field.changed", receiptId, { field: f, from: prev.fields[f], to: next.fields[f] }));
+      }
+    }
+    const a = prev.lines;
+    const b = next.lines;
+    if (a.length === b.length) {
+      a.forEach((line, i) => out.push(...diffLineFields(receiptId, line, b[i], i + 1, opts)));
+      return out;
+    }
+    if (Math.abs(a.length - b.length) === 1) {
+      const added = b.length > a.length;
+      const j = added ? findRemovalIndex(b, a) : findRemovalIndex(a, b);
+      if (j >= 0) {
+        const changed = added ? b[j] : a[j];
+        out.push(draft(opts, added ? "item.added" : "item.deleted", receiptId, {
+          line: j + 1,
+          [added ? "to" : "from"]: changed.name
+        }));
+        const keptPrev = added ? a : a.filter((_, i) => i !== j);
+        const keptNext = added ? b.filter((_, i) => i !== j) : b;
+        keptPrev.forEach((line, k) => {
+          const lineNo = added ? k < j ? k + 1 : k + 2 : k + 1;
+          out.push(...diffLineFields(receiptId, line, keptNext[k], lineNo, opts));
+        });
+        return out;
+      }
+    }
+    const extra = Math.abs(a.length - b.length);
+    for (let i = 0; i < extra; i++) {
+      out.push(draft(opts, a.length < b.length ? "item.added" : "item.deleted", receiptId));
+    }
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) out.push(...diffLineFields(receiptId, a[i], b[i], i + 1, opts));
+    return out;
+  }
+  var ChangeTracker = class {
+    constructor() {
+      __publicField(this, "snaps", /* @__PURE__ */ new Map());
+    }
+    /** Starts tracking without logging anything. Call after load and migration, so restore never logs "created". */
+    seed(receipts) {
+      this.snaps = new Map(receipts.map((r) => [r.id, snapshotOf(r)]));
+    }
+    /** Log drafts for everything that changed since the last sync. A no-op sync returns []. */
+    sync(receipts, opts) {
+      const drafts = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const r of receipts) {
+        seen.add(r.id);
+        const next = snapshotOf(r);
+        const prev = this.snaps.get(r.id);
+        if (!prev) {
+          drafts.push(draft(opts, "receipt.created", r.id, { note: opts.source ?? null }));
+        } else {
+          drafts.push(...diffReceipt(r.id, prev, next, opts));
+        }
+        this.snaps.set(r.id, next);
+      }
+      for (const id of [...this.snaps.keys()]) {
+        if (!seen.has(id)) {
+          drafts.push(draft(opts, "receipt.deleted", id, { note: opts.reason ?? null }));
+          this.snaps.delete(id);
+        }
+      }
+      return drafts;
+    }
+  };
+  var EDIT_ACTIONS = /* @__PURE__ */ new Set(["field.changed", "item.added", "item.deleted"]);
+  function applyWorkflowEffects(receipts, drafts, opts) {
+    const createdIds = new Set(drafts.filter((d) => d.action === "receipt.created").map((d) => d.receiptId));
+    const editedIds = new Set(drafts.filter((d) => EDIT_ACTIONS.has(d.action)).map((d) => d.receiptId));
+    const extra = [];
+    const updated = receipts.map((r) => {
+      if (!r.status && !createdIds.has(r.id)) return r;
+      if (createdIds.has(r.id)) {
+        return { ...r, status: initialStatus(r), statusAt: opts.at, statusBy: opts.actor };
+      }
+      const from = r.status;
+      if (from === "captured" && hasUnresolvedHighFlag(r)) {
+        extra.push(statusDraft(opts, r.id, from, "needs_review", "auto escalation: unresolved High flag"));
+        return { ...r, status: "needs_review", statusAt: opts.at, statusBy: opts.actor };
+      }
+      if (editedIds.has(r.id)) {
+        const to = statusAfterEdit(from);
+        if (to !== from) {
+          extra.push(statusDraft(opts, r.id, from, to, "edited after approval"));
+          return { ...r, status: to, statusAt: opts.at, statusBy: opts.actor };
+        }
+      }
+      return r;
+    });
+    return { receipts: updated, drafts: [...drafts, ...extra] };
+  }
+  function statusDraft(opts, receiptId, from, to, note) {
+    return {
+      at: opts.at,
+      actor: opts.actor,
+      action: "status.changed",
+      receiptId,
+      batchId: null,
+      field: "status",
+      line: null,
+      from,
+      to,
+      note
+    };
+  }
+
+  // src/core/batches.ts
+  var isoDay2 = (now) => now.toISOString().slice(0, 10);
+  function nextBatchId(batches, now) {
+    const prefix = `B-${isoDay2(now).replace(/-/g, "")}-`;
+    const n = batches.filter((b) => b.id.startsWith(prefix)).length + 1;
+    return `${prefix}${n}`;
+  }
+  function batchSnapshot(r) {
+    const { imageUrl: _image, thumbUrl: _thumb, ...rest } = r;
+    return JSON.parse(JSON.stringify(rest));
+  }
+  function createBatch(receipts, batches, actor, now) {
+    const approved = receipts.filter((r) => r.status === "approved");
+    if (approved.length === 0) return { ok: false, error: "No approved receipts to export." };
+    const at = now.toISOString();
+    const id = nextBatchId(batches, now);
+    const locked = /* @__PURE__ */ new Map();
+    for (const r of approved) {
+      locked.set(r.id, { ...r, status: "exported", statusAt: at, statusBy: actor, batchId: id, exportedAt: at });
+    }
+    const snapshot = approved.map((r) => batchSnapshot(locked.get(r.id)));
+    const total = Math.round(approved.reduce((sum, r) => sum + (Number(r.total) || 0), 0) * 100) / 100;
+    const batch = {
+      id,
+      at,
+      actor,
+      receiptIds: approved.map((r) => r.id),
+      count: approved.length,
+      total,
+      downloads: [],
+      corrections: approved.filter((r) => (r.revision || 0) > 0).map((r) => r.id),
+      receipts: snapshot
+    };
+    const drafts = [
+      { at, actor, action: "batch.created", receiptId: null, batchId: id, field: null, line: null, from: null, to: null, note: `${batch.count} receipts` },
+      ...approved.map((r) => ({
+        at,
+        actor,
+        action: "status.changed",
+        receiptId: r.id,
+        batchId: id,
+        field: "status",
+        line: null,
+        from: "approved",
+        to: "exported",
+        note: null
+      }))
+    ];
+    return {
+      ok: true,
+      batch,
+      receipts: receipts.map((r) => locked.get(r.id) ?? r),
+      batches: [...batches, batch],
+      drafts
+    };
+  }
+  function reopenReceipt(receipt, reason, actor, now) {
+    if (receipt.status !== "exported") return { ok: false, error: "Only exported receipts can be reopened." };
+    const note = (reason || "").trim();
+    if (note.length < MIN_WAIVER_NOTE_LENGTH) {
+      return { ok: false, error: `Write a reason of at least ${MIN_WAIVER_NOTE_LENGTH} characters.` };
+    }
+    const at = now.toISOString();
+    const to = transition("exported", "reopen");
+    if (to === null) return { ok: false, error: "This receipt cannot be reopened." };
+    const oldRevision = receipt.revision || 0;
+    const newRevision = oldRevision + 1;
+    const reopened = { ...receipt, status: to, statusAt: at, statusBy: actor, revision: newRevision };
+    const drafts = [
+      {
+        at,
+        actor,
+        action: "batch.receipt.reopened",
+        receiptId: receipt.id,
+        batchId: receipt.batchId ?? null,
+        field: "revision",
+        line: null,
+        from: oldRevision,
+        to: newRevision,
+        note
+      },
+      {
+        at,
+        actor,
+        action: "status.changed",
+        receiptId: receipt.id,
+        batchId: receipt.batchId ?? null,
+        field: "status",
+        line: null,
+        from: "exported",
+        to,
+        note: "reopened"
+      }
+    ];
+    return { ok: true, receipt: reopened, drafts };
+  }
+
+  // src/core/migrate.ts
+  var SESSION_SCHEMA = 2;
+  function migrateSession(session, at, actor) {
+    const fromSchema = session.schema ?? 1;
+    if (fromSchema > SESSION_SCHEMA) {
+      throw new Error(`This file was saved by a newer version (schema ${fromSchema}). Update the app to open it.`);
+    }
+    let needsReview = 0;
+    const receipts = (session.receipts || []).map((r) => {
+      const withDefaults = {
+        ...r,
+        waivers: r.waivers ?? [],
+        batchId: r.batchId ?? null,
+        exportedAt: r.exportedAt ?? null,
+        revision: r.revision ?? 0
+      };
+      if (r.status) return withDefaults;
+      needsReview += 1;
+      return { ...withDefaults, status: "needs_review", statusAt: at, statusBy: actor };
+    });
+    let auditLog = [...session.auditLog || []];
+    if (receipts.length > 0 && auditLog.length === 0) {
+      auditLog = appendLogEntry(auditLog, {
+        at,
+        actor,
+        action: "session.migrated",
+        receiptId: null,
+        batchId: null,
+        field: null,
+        line: null,
+        from: fromSchema,
+        to: SESSION_SCHEMA,
+        note: `Migrated from schema ${fromSchema}; ${needsReview} receipts set to Needs review`
+      });
+    }
+    return {
+      ...session,
+      schema: SESSION_SCHEMA,
+      receipts,
+      auditLog,
+      batches: session.batches || [],
+      actorName: session.actorName || actor
+    };
   }
   return __toCommonJS(index_exports);
 })();

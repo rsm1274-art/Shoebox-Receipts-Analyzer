@@ -15,8 +15,21 @@ export function escapeCsvCell(val: unknown): string {
   return `"${str.replace(/"/g, '""')}"`;
 }
 
+/** Receipts reopened and exported again (revision > 0) are corrections. Default receipts (revision 0) are unchanged. */
+export function correctionRevision(receipt: Pick<Receipt, 'revision'>): number {
+  return Number(receipt.revision) || 0;
+}
+
+/** The transaction id for the .QBO file: the receipt id, plus -rN for a correction. */
+export function qboFitId(receipt: Receipt): string {
+  const rev = correctionRevision(receipt);
+  return rev > 0 ? `${receipt.id}-r${rev}` : receipt.id;
+}
+
 /** The description packed into bank-feed and .QBO rows: merchant | split hint | van | fuel | first three items. */
 export function buildQboBankMemo(receipt: Receipt): string {
+  const rev = correctionRevision(receipt);
+  const correctionPrefix = rev > 0 ? `CORRECTION r${rev} | ` : '';
   const splits = receipt.qboSplits || [];
   const splitHint = splits.length > 1
     ? `[SPLIT: ${splits.map((s) => `${s.category.split(':')[0]} $${s.qboSplitAmount.toFixed(2)}`).join(' / ')}]`
@@ -26,7 +39,7 @@ export function buildQboBankMemo(receipt: Receipt): string {
   const fuelStr = receipt.fuelMeta ? ` | ${receipt.fuelMeta}` : '';
   const itemsSummary = (receipt.items || []).map((i) => i.name).slice(0, 3).join(', ');
 
-  return `${receipt.merchant} | ${splitHint} | ${vanShort}${fuelStr} | ${itemsSummary}`;
+  return `${correctionPrefix}${receipt.merchant} | ${splitHint} | ${vanShort}${fuelStr} | ${itemsSummary}`;
 }
 
 /** Receipts to export; optionally leaving out those still flagged with a math error. */
@@ -48,7 +61,8 @@ export function buildBankFeedCsv(list: Receipt[]): string {
   ]);
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
 }
-export const bankFeedFileName = (now: Date) => `QBO_BankFeed_4Col_${isoDay(now)}.csv`;
+const batchSuffix = (batchId?: string) => (batchId ? `_${batchId}` : '');
+export const bankFeedFileName = (now: Date, batchId?: string) => `QBO_BankFeed_4Col_${isoDay(now)}${batchSuffix(batchId)}.csv`;
 
 /** Option 2: one row per account split, tax and tip included. */
 export function buildSplitCsv(list: Receipt[]): string {
@@ -60,7 +74,9 @@ export function buildSplitCsv(list: Receipt[]): string {
   list.forEach((r) => {
     const auditFlags = (r.anomalies || []).map((a) => a.code).join('; ') || 'CLEAN';
     (r.qboSplits || []).forEach((sp) => {
-      const memo = sp.itemNames.join('; ') + (r.fuelMeta ? ` [${r.fuelMeta}]` : '');
+      const rev = correctionRevision(r);
+      const correctionPrefix = rev > 0 ? `CORRECTION r${rev}: ` : '';
+      const memo = correctionPrefix + sp.itemNames.join('; ') + (r.fuelMeta ? ` [${r.fuelMeta}]` : '');
       rows.push([
         escapeCsvCell(r.id),
         formatDateForQBO(r.date),
@@ -77,7 +93,7 @@ export function buildSplitCsv(list: Receipt[]): string {
   });
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
 }
-export const splitCsvFileName = (now: Date) => `QBO_Detailed_Splits_${isoDay(now)}.csv`;
+export const splitCsvFileName = (now: Date, batchId?: string) => `QBO_Detailed_Splits_${isoDay(now)}${batchSuffix(batchId)}.csv`;
 
 /** Option 3: OFX 1.02 credit-card statement (.QBO) with the receipt id as the transaction id. */
 export function buildQboWebConnect(list: Receipt[], now: Date): string {
@@ -91,7 +107,7 @@ export function buildQboWebConnect(list: Receipt[], now: Date): string {
 <TRNTYPE>DEBIT
 <DTPOSTED>${dtPosted}
 <TRNAMT>-${Number(r.total || 0).toFixed(2)}
-<FITID>${r.id}
+<FITID>${qboFitId(r)}
 <NAME>${cleanName}
 <MEMO>${cleanMemo}
 </STMTTRN>`;
@@ -133,4 +149,4 @@ ${trnBlocks}
 </CREDITCARDMSGSRSV1>
 </OFX>`;
 }
-export const webConnectFileName = (now: Date) => `ReceiptAudit_${isoDay(now)}.qbo`;
+export const webConnectFileName = (now: Date, batchId?: string) => `ReceiptAudit_${isoDay(now)}${batchSuffix(batchId)}.qbo`;
