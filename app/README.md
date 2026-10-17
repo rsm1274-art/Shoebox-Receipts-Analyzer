@@ -15,7 +15,12 @@ src/core/
 tests/
   core/behavior.test.ts   readable examples of the rules the Help manual describes
   core/golden.test.ts     TypeScript core must equal what the shipped app produced on a seeded corpus
-  oracle/                 harness that runs the frozen legacy app in a VM to (re)create the golden data
+  oracle/                 harness that runs a release in a VM; also checks the released apps reproduce the golden data
+  oracle/wired.test.ts    the apps in releases/ (rules delegating to the core) must equal the pre-extraction outputs
+scripts/
+  bundle-core.mjs         esbuild: src/core -> one IIFE exposing the global ReceiptCore
+  wire-core.mjs           swaps the app's rule functions for thin adapters over ReceiptCore (acorn-based)
+  build-releases.mjs      bundle + python generator + wire
   golden/core.json        the recorded legacy outputs (about 1,000 cases, 8 context variants)
 ```
 
@@ -23,8 +28,10 @@ tests/
 
 ```
 npm install
-npm test                 # unit + golden-master + parity
+npm test                 # unit + golden-master + parity + released-app checks
 npm run typecheck
+npm run bundle:core      # compile src/core -> ../tools/legacy-gen/receipt-core.iife.js (committed)
+npm run build:releases   # bundle, regenerate the three apps, wire them to the core
 npm run golden:capture   # regenerate tests/golden/core.json from the frozen legacy app (rarely needed)
 ```
 

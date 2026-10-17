@@ -37,7 +37,10 @@ export function createLegacyCore(htmlPath?: string) {
       static now() { return new __RealDate('${FIXED_NOW_ISO}').getTime(); }
     };`, sandbox);
   const unique = [...new Set(FUNCTIONS)];
-  vm.runInContext(unique.map((n) => declarationSource(source, n)).join('\n'), sandbox);
+  // a wired release carries the bundled core and a context adapter; load them first when present
+  const wired = source.includes('var ReceiptCore =');
+  const names = wired ? ['ReceiptCore', 'coreCtx', ...unique] : unique;
+  vm.runInContext(names.map((n) => declarationSource(source, n)).join('\n'), sandbox);
 
   const apply = (ctx: CoreContext) => {
     sandbox.coaAccounts = clone(ctx.coaAccounts);
