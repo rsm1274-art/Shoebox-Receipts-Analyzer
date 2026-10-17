@@ -1,0 +1,40 @@
+<div id="clearAllModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Clear all receipts">
+        <div class="modal" style="max-width:600px">
+            <div class="modal-head">
+                <div>
+                    <h3>Clear all receipts?</h3>
+                    <p class="muted">This empties the whole queue.</p>
+                </div>
+                <button onclick="closeClearAll()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="note clearall-warn">
+                    <p class="note-title">&#9888; This removes <span id="clearAllCount">0</span> receipts from the queue <u>and from your saved work</u>.</p>
+                    <p>Both the autosave in this browser and your linked save file are emptied, and the small receipt pictures go with them. Your account list and settings are kept.</p>
+                </div>
+                <div class="note">
+                    <p class="note-title">Before you continue, have you&hellip;</p>
+                    <ul class="clearall-list">
+                        <li>exported the files you need from <b>QBO Export Suite</b>?</li>
+                        <li>saved an archive copy of this year&rsquo;s work?</li>
+                        <li>filed the paper receipts by date?</li>
+                    </ul>
+                    <p id="clearAllFileStatus" class="muted" style="margin-top:0.6rem"></p>
+                    <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:0.7rem">
+                        <button onclick="downloadSessionBackup()" class="btn btn-ghost"><i data-lucide="download" style="width:14px;height:14px"></i><span>Download a backup copy now</span></button>
+                        <button onclick="closeClearAll(); openHelp('help-yearend')" class="text-link">Open the year-end checklist</button>
+                    </div>
+                </div>
+                <div>
+                    <label for="clearAllConfirm" style="font-weight:600">Type <code>CLEAR</code> to confirm</label>
+                    <input id="clearAllConfirm" type="text" class="input" autocomplete="off" spellcheck="false" placeholder="CLEAR" style="margin-top:0.4rem;width:100%" oninput="refreshClearAllGo()" onkeydown="if(event.key==='Enter')clearAllReceipts()">
+                </div>
+                <div style="display:flex;gap:0.6rem;justify-content:flex-end;flex-wrap:wrap">
+                    <button onclick="closeClearAll()" class="btn btn-ghost"><span>Cancel</span></button>
+                    <button id="clearAllGo" onclick="clearAllReceipts()" class="btn" disabled><i data-lucide="trash-2" style="width:14px;height:14px"></i><span>Clear all receipts</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->

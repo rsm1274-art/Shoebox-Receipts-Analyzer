@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shoebox Receipts Analyzer — {{NAME}} mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family={{GF}}&display=swap" rel="stylesheet">
+<style>
+:root{--bg:{{bg}};--surf:{{surf}};--ink:{{ink}};--mut:{{mut}};--line:{{line}};--bw:{{bw}}px;--acc:{{acc}};--acc2:{{acc2}};--accink:{{accink}};
+--r:{{r}}px;--rb:{{rb}}px;--sh:{{sh}};--hf:"{{hf}}",sans-serif;--bf:"{{bf}}",sans-serif;--mf:"{{mf}}",monospace;--hc:{{hc}};--hw:{{hw}};--ht:{{ht}};--hs:{{hs}};--bww:{{bww}};
+--okb:{{okb}};--okf:{{okf}};--wb:{{wb}};--wf:{{wf}};--bb:{{bb}};--bfg:{{bfg}};--hover:{{hover}}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--bf);font-size:15px;line-height:1.45}
+h1,h2,h3,h4{margin:0;font-family:var(--hf);font-weight:var(--hw);letter-spacing:var(--ht);text-transform:var(--hc);line-height:1.1}
+p{margin:0}.mono{font-family:var(--mf)}.mut{color:var(--mut)}
+.wrap{max-width:1360px;margin:0 auto;padding:0 24px}
+header{border-bottom:var(--bw) solid var(--line);background:var(--bg)}
+.top{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;padding:18px 24px}
+.brand{display:flex;gap:14px;align-items:center}
+.logo{width:48px;height:48px;background:var(--acc);color:var(--accink);display:grid;place-items:center;border-radius:var(--r);border:var(--bw) solid var(--line);font-size:22px}
+.brand h1{font-size:clamp(22px,2.4vw,32px)}
+.tag{font-size:12px;color:var(--mut);margin-top:3px}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn{font:inherit;font-weight:var(--bww);cursor:pointer;padding:9px 16px;background:var(--surf);color:var(--ink);border:var(--bw) solid var(--line);border-radius:var(--rb);transition:.2s}
+.btn:hover{background:var(--hover)}
+.btn.p{background:var(--acc);color:var(--accink);border-color:var(--acc)}.btn.p:hover{filter:brightness(.93)}
+.seg{display:flex;border:var(--bw) solid var(--line);border-radius:var(--rb);overflow:hidden}
+.seg span{padding:8px 14px;font-size:13px;font-weight:var(--bww)}.seg .on{background:var(--ink);color:var(--bg)}
+.chip{display:inline-block;font-family:var(--mf);font-size:11px;font-weight:600;padding:3px 9px;border-radius:var(--rb);background:var(--okb);color:var(--okf);border:var(--bw) solid transparent;white-space:nowrap}
+.chip.w{background:var(--wb);color:var(--wf)}.chip.b{background:var(--bb);color:var(--bfg)}
+main{padding:28px 24px 60px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-bottom:24px}
+.card{background:var(--surf);border:var(--bw) solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:20px}
+.kpi{display:flex;justify-content:space-between;gap:10px}
+.lab{font-family:var(--mf);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
+.val{font-family:var(--hf);font-weight:var(--hw);text-transform:var(--hc);letter-spacing:var(--ht);font-size:calc(34px*var(--hs));line-height:1.1;margin:6px 0 2px}
+.ico{width:40px;height:40px;border-radius:var(--r);background:var(--acc);color:var(--accink);display:grid;place-items:center;flex:none}
+.ico.s{background:var(--acc2);color:var(--bg)}
+.ws{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:24px}
+@media(max-width:980px){.ws{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:24px}
+.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}
+.ph h2{font-size:calc(24px*var(--hs))}
+.drop{display:block;text-align:center;padding:28px 16px;border:var(--bw) dashed var(--line);border-radius:var(--r);background:var(--bg)}
+.drop b{display:block;margin-top:8px}.drop span{font-size:13px;color:var(--mut)}
+.prog{margin-top:14px}.prog .row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px}
+.trk{height:8px;background:var(--bg);border:var(--bw) solid var(--line);border-radius:var(--rb);overflow:hidden}.trk i{display:block;height:100%;width:64%;background:var(--acc)}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.sample{text-align:left;font:inherit;color:inherit;cursor:pointer;background:var(--bg);border:var(--bw) solid var(--line);border-radius:var(--r);padding:12px}
+.sample:hover{background:var(--hover)}.sample .n{font-weight:var(--bww);display:block;margin-bottom:6px}
+.sample p{font-size:12px;color:var(--mut);margin-top:6px}
+.q{display:flex;flex-direction:column;gap:10px}
+.item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 14px;border:var(--bw) solid var(--line);border-radius:var(--r);background:var(--bg);cursor:pointer}
+.item.sel{border-color:var(--acc);outline:var(--bw) solid var(--acc);background:var(--surf)}
+.item .m{font-weight:var(--bww)}.item .s{font-size:12px;color:var(--mut)}
+.item .a{font-family:var(--mf);font-weight:700;text-align:right;margin-bottom:4px}
+select{font:inherit;color:var(--ink);background:var(--bg);border:var(--bw) solid var(--line);border-radius:var(--rb);padding:7px 10px}
+.ins h2{font-size:calc(30px*var(--hs))}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
+.meta div{padding:10px 12px;background:var(--bg);border:var(--bw) solid var(--line);border-radius:var(--r)}
+.meta b{display:block;font-family:var(--mf);font-size:14px;margin-top:3px}
+.alert{display:flex;gap:10px;padding:12px 14px;border:var(--bw) solid var(--line);border-left:6px solid var(--acc);border-radius:var(--r);background:var(--bg);margin-bottom:16px;font-size:14px}
+.sec{font-family:var(--mf);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--mut);margin:20px 0 8px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-family:var(--mf);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);text-align:left;padding:8px;border-bottom:var(--bw) solid var(--line)}
+td{padding:10px 8px;border-bottom:1px solid var(--line)}.num{text-align:right;font-family:var(--mf)}th.num{text-align:right}
+tfoot td{font-weight:700;border-bottom:0;border-top:var(--bw) solid var(--line)}
+.exp{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:8px}
+.exp .card{box-shadow:none;padding:14px;display:flex;flex-direction:column;gap:10px;justify-content:space-between}
+.exp h4{font-size:calc(20px*var(--hs))}
+.foot{padding:18px 24px;border-top:var(--bw) solid var(--line);font-size:12px;color:var(--mut);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+</style></head><body>
+<header><div class="wrap top">
+ <div class="brand"><div class="logo">&#128666;</div><div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h1>White Van Shoebox &rarr; QBO</h1><span class="chip">&#10003; 100% Local Engine</span></div>
+  <p class="tag">Fleet Operations + Startup Phase Categorizer &bull; Pro-Rata Tax Split &amp; QuickBooks Online Exporter</p></div></div>
+ <div class="ctl"><span class="chip w">&#9679; Startup Phase: ON</span><button class="btn">QBO Accounts</button><button class="btn p">QBO Export Suite</button>
+ <div class="seg"><span class="on">WASM OCR</span><span>Ollama VLM</span></div></div>
+</div></header>
+<main class="wrap">
+<section class="kpis">
+ <div class="card kpi"><div><p class="lab">Shoebox Queue</p><p class="val">4</p><p class="mut" style="font-size:13px">1 Split Transaction</p></div><div class="ico">&#129534;</div></div>
+ <div class="card kpi"><div><p class="lab">Fleet Operating Spend</p><p class="val">$412.86</p><p class="mut" style="font-size:13px">Fuel, Maintenance &amp; Gear</p></div><div class="ico s">&#128666;</div></div>
+ <div class="card kpi"><div><p class="lab">Startup &amp; CapEx Spend</p><p class="val">$3,214.40</p><p class="mut" style="font-size:13px">Sec. 195 Startup + Upfitting</p></div><div class="ico">&#128640;</div></div>
+ <div class="card kpi"><div><p class="lab">Audit Flags &amp; QBO Ready</p><p class="val">2</p><a class="mut" style="font-size:13px;text-decoration:underline">Open QBO Exporter &rarr;</a></div><div class="ico s">&#9888;</div></div>
+</section>
+<div class="ws">
+ <div class="stack">
+  <div class="card"><div class="ph"><h2>Scan White Van / Startup Receipt</h2><span class="mut" style="font-size:12px">PNG, JPG, WEBP</span></div>
+   <label class="drop"><div style="font-size:26px">&#9729;</div><b>Click to upload receipt photo or drag &amp; drop</b><span>Auto-detects Fuel Gallons, Payment Card, CapEx &amp; QBO Splits</span></label>
+   <div class="prog"><div class="row"><span>Running Local Tesseract WASM&hellip;</span><span class="mono">64%</span></div><div class="trk"><i></i></div></div>
+   <div class="ph" style="margin:20px 0 0"><span class="lab">White Van &amp; Startup Test Receipts</span><a class="mut" style="font-size:12px;text-decoration:underline">+ Reset 4 Fleet Samples</a></div>
+   <div class="sg">
+    <button class="sample"><span class="n">Upfit &amp; Cargo Gear</span><span class="chip w">Split + Startup</span><p>E-Track shelving + straps + personal item</p></button>
+    <button class="sample"><span class="n">Metro Diesel &amp; DEF</span><span class="chip">Fuel + Gal</span><p>21.50 gal @ $3.80/gal + DEF + Toll</p></button>
+    <button class="sample"><span class="n">Liftgate &amp; DOT Setup</span><span class="chip b">CapEx &gt;$2.5k</span><p>$2,850 Hydraulic Liftgate + DOT Decal</p></button>
+    <button class="sample"><span class="n">Road Crew Dinner</span><span class="chip w">Math + Tip</span><p>28% tip + $10 receipt total math error</p></button>
+   </div></div>
+  <div class="card"><div class="ph"><h2>Shoebox Queue</h2><select><option>All Receipts</option><option>Multi-Category Splits</option><option>Startup / CapEx Only</option><option>Audit Flagged Only</option></select></div>
+   <div class="q">
+    <div class="item sel"><div><p class="m">Upfit &amp; Cargo Gear</p><p class="s">03/14/2026 &bull; Van 02 &bull; 3 splits</p></div><div style="text-align:right"><p class="a">$812.46</p><span class="chip w">Split</span></div></div>
+    <div class="item"><div><p class="m">Metro Diesel &amp; DEF</p><p class="s">03/15/2026 &bull; Van 01 &bull; 21.50 gal</p></div><div style="text-align:right"><p class="a">$118.40</p><span class="chip">Fuel</span></div></div>
+    <div class="item"><div><p class="m">Liftgate &amp; DOT Setup</p><p class="s">03/02/2026 &bull; Van 01 &bull; CapEx</p></div><div style="text-align:right"><p class="a">$2,401.94</p><span class="chip b">Flagged</span></div></div>
+    <div class="item"><div><p class="m">Road Crew Dinner</p><p class="s">03/16/2026 &bull; Meals</p></div><div style="text-align:right"><p class="a">$96.10</p><span class="chip b">Math error</span></div></div>
+   </div></div>
+ </div>
+ <div class="stack"><div class="card ins">
+  <div class="ph"><div><span class="chip w">Split + Startup</span><h2 style="margin-top:8px">Upfit &amp; Cargo Gear Co.</h2></div><div class="ctl"><button class="btn">Download Image</button><button class="btn">Delete</button></div></div>
+  <div class="alert"><b>&#9888;</b><div><b>Personal item detected.</b> Line 3 (&ldquo;Energy drink 4-pack&rdquo;) looks non-deductible &mdash; reassign or exclude from export.</div></div>
+  <div class="meta"><div><span class="lab">Date</span><b>03/14/2026</b></div><div><span class="lab">Paid from</span><b>Visa &bull;&bull;4821</b></div><div><span class="lab">Van class</span><b>Van 02</b></div><div><span class="lab">Tax / Tip</span><b>$58.46 / $0.00</b></div></div>
+  <p class="sec">Line items &amp; QBO split</p>
+  <table><thead><tr><th>Description</th><th>QBO account</th><th class="num">Item $</th><th class="num">QBO split $</th></tr></thead><tbody>
+   <tr><td>E-Track shelving kit</td><td>Startup: Van Upfitting</td><td class="num">$489.00</td><td class="num">$523.68</td></tr>
+   <tr><td>Ratchet straps (12)</td><td>Vehicle: Cargo Gear</td><td class="num">$214.00</td><td class="num">$229.16</td></tr>
+   <tr><td>Energy drink 4-pack</td><td>Owner Draw (Personal)</td><td class="num">$51.00</td><td class="num">$54.62</td></tr></tbody>
+   <tfoot><tr><td colspan="2">Total charged</td><td class="num">$754.00</td><td class="num">$812.46</td></tr></tfoot></table>
+  <p class="sec">QBO export suite</p>
+  <div class="exp">
+   <div class="card"><div><span class="chip">Option 1</span><h4 style="margin-top:8px">4-Column Bank Feed</h4><p class="mut" style="font-size:12px;margin-top:6px">Date, Description, Credit, Debit CSV.</p></div><button class="btn">Download CSV</button></div>
+   <div class="card"><div><span class="chip w">Option 2</span><h4 style="margin-top:8px">Detailed Split CSV</h4><p class="mut" style="font-size:12px;margin-top:6px">One row per category split.</p></div><button class="btn p">Download Split CSV</button></div>
+   <div class="card"><div><span class="chip b">Option 3</span><h4 style="margin-top:8px">Web Connect (.QBO)</h4><p class="mut" style="font-size:12px;margin-top:6px">OFX with unique FITIDs.</p></div><button class="btn">Download .QBO</button></div>
+  </div>
+ </div></div>
+</div></main>
+<div class="foot"><span>Mockup &mdash; <b>{{NAME}}</b> design system &bull; {{CHAR}}</span><span class="mono">source: rsm1274-art/design_extraction/{{SLUG}}</span></div>
+</body></html>

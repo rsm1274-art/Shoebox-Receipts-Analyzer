@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+tools/design-mockups/out/
+*.log
+__pycache__/
+docs/
