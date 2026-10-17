@@ -5,3 +5,4 @@ tools/design-mockups/out/
 *.log
 __pycache__/
 docs/
+tests/oracle/.dump/
