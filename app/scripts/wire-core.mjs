@@ -31,21 +31,21 @@ const ADAPTERS = {
             const list = getExportableReceipts();
             if (list.length === 0) return;
             const now = new Date();
-            triggerBlobDownload(ReceiptCore.buildBankFeedCsv(list), ReceiptCore.bankFeedFileName(now));
+            triggerBlobDownload(ReceiptCore.buildBankFeedCsv(list), ReceiptCore.bankFeedFileName(now, wfCurrentBatchId()));
             showToast('Downloaded QBO 4-Column Bank Feed CSV');
         }`,
   downloadQboSplitJournalCSV: `function downloadQboSplitJournalCSV() {
             const list = getExportableReceipts();
             if (list.length === 0) return;
             const now = new Date();
-            triggerBlobDownload(ReceiptCore.buildSplitCsv(list), ReceiptCore.splitCsvFileName(now));
+            triggerBlobDownload(ReceiptCore.buildSplitCsv(list), ReceiptCore.splitCsvFileName(now, wfCurrentBatchId()));
             showToast('Downloaded QBO Multi-Category Split CSV');
         }`,
   downloadQboWebConnectFile: `function downloadQboWebConnectFile() {
             const list = getExportableReceipts();
             if (list.length === 0) return;
             const now = new Date();
-            triggerBlobDownload(ReceiptCore.buildQboWebConnect(list, now), ReceiptCore.webConnectFileName(now), 'application/vnd.intu.qbo');
+            triggerBlobDownload(ReceiptCore.buildQboWebConnect(list, now), ReceiptCore.webConnectFileName(now, wfCurrentBatchId()), 'application/vnd.intu.qbo');
             showToast('Downloaded QuickBooks Web Connect (.QBO) file');
         }`
 };

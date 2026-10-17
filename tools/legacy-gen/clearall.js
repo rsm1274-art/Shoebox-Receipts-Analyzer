@@ -44,7 +44,9 @@ function clearAllReceipts() {
     receipts = [];
     selectedReceiptId = null;
     closeClearAll();
+    wfReason = 'clear-all';                            // every removal is logged with this reason
     updateDashboard();                                 // re-renders, autosaves, and refreshes the buttons
+    wfReason = null;
     showToast(`Cleared ${n} receipt${n === 1 ? '' : 's'} — click “Undo clear” in the queue to bring them back`);
 }
 function undoClearAll() {
@@ -53,7 +55,9 @@ function undoClearAll() {
     selectedReceiptId = clearedBackup.selectedReceiptId;
     const n = receipts.length;
     clearedBackup = null;
+    wfSource = 'undo';
     updateDashboard();
+    wfSource = null;
     showToast(`Restored ${n} receipt${n === 1 ? '' : 's'}`);
 }
 

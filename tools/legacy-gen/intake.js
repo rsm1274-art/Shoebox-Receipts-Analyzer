@@ -230,10 +230,13 @@ async function restoreScanFolder() {
     dz.addEventListener('drop', async e => {
         const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
         if (!files.length) { showToast('Drop image files (JPG, PNG or WEBP) — PDFs are not supported'); return; }
-        for (const f of files) {
-            try { await processReceiptImageLocally(await downscaleImageDataUrl(await blobToDataUrl(f)), f.name); }
-            catch (err) { showToast(`Could not read "${f.name}": ${err.message}`); }
-        }
+        wfSource = 'drag-drop';
+        try {
+            for (const f of files) {
+                try { await processReceiptImageLocally(await downscaleImageDataUrl(await blobToDataUrl(f)), f.name); }
+                catch (err) { showToast(`Could not read "${f.name}": ${err.message}`); }
+            }
+        } finally { wfSource = null; }
     });
     // a file dropped anywhere else should not make the browser navigate away from the app
     window.addEventListener('dragover', e => e.preventDefault());

@@ -42,7 +42,7 @@
                             <li><label><input type="checkbox" data-step="5"> <span><b>Protect your work.</b> Click <i>Save File</i> and pick a folder. Now every change is saved twice.</span></label> <button class="text-link help-show" data-show="savefile">Show me</button></li>
                             <li><label><input type="checkbox" data-step="6"> <span><b>Add your own receipt.</b> Upload a photo, use the camera, or point the app at your scanner&rsquo;s folder.</span></label> <button class="text-link help-show" data-show="intake">Show me</button></li>
                             <li><label><input type="checkbox" data-step="7"> <span><b>Look at your accounts.</b> Open <i>QBO Accounts</i> to see the categories the app files things into.</span></label> <button class="text-link help-show" data-show="coa">Show me</button></li>
-                            <li><label><input type="checkbox" data-step="8"> <span><b>Export.</b> Open <i>QBO Export Suite</i> and download a file for QuickBooks.</span></label> <button class="text-link help-show" data-show="export">Show me</button></li>
+                            <li><label><input type="checkbox" data-step="8"> <span><b>Approve, then export.</b> Approve each receipt once it checks out, then open <i>QBO Export Suite</i>, create an export batch from the approved receipts and download a file for QuickBooks.</span></label> <button class="text-link help-show" data-show="export">Show me</button></li>
                         </ol>
                     </div>
                     <div class="hb">
@@ -51,7 +51,7 @@
                             <li><b>The app suggests; you decide.</b> OCR (text recognition) makes mistakes. Always glance at merchant, date, amounts and accounts before exporting.</li>
                             <li><b>Keep the paper.</b> The app keeps only a small low-resolution copy of each photo (about 60 KB) &mdash; good for a quick look, not for fine print. File the hard copies by date; the app tells you which date to look under.</li>
                             <li><b>Link a save file</b> on day one so a browser problem can never cost you your work.</li>
-                            <li><b>Anything red is a stop sign.</b> Fix it or deliberately accept it before you export.</li>
+                            <li><b>Anything red is a stop sign.</b> Fix it or deliberately accept it (with a written reason) before you approve. Exported receipts are locked.</li>
                         </ul>
                     </div>
                 </section>
@@ -264,18 +264,72 @@
                     <div class="hb">
                         <h3>Deleting a receipt</h3>
                         <p>The trash button removes the receipt from the queue <i>and from the saved session</i>, after a confirmation. It cannot be undone, but a save file you made earlier still contains it.</p>
-                        <p><b>Clear all</b> (above the receipt list) removes <i>every</i> receipt at once. It shows a warning with the number of receipts, reminds you to export and make an archive copy, tells you whether a save file is linked (and offers a backup download), and only enables the button after you type <code>CLEAR</code>. Your account list and settings are kept. For a short time afterwards (until you scan another receipt, or close or reload the page) an <b>Undo clear</b> link brings the receipts back.</p>
+                        <p><b>Clear all</b> (above the receipt list) removes <i>every</i> receipt at once. It shows a warning with the number of receipts, reminds you to export and make an archive copy, tells you whether a save file is linked (and offers a backup download), and only enables the button after you type <code>CLEAR</code>. Your account list and settings are kept. Every removal is recorded in the <b>Audit Log</b>, including exported receipts. For a short time afterwards (until you scan another receipt, or close or reload the page) an <b>Undo clear</b> link brings the receipts back.</p>
                         <div class="help-actions"><button class="text-link help-show" data-show="clearall">Show me</button></div>
                     </div>
                 </section>
 
                 <!-- ================= AUDIT FLAGS ================= -->
+                <!-- ================= REVIEW AND APPROVAL ================= -->
+                <section class="help-sec" id="help-approval" data-title="Review and approval" data-icon="badge-check">
+                    <h2>Review and approval</h2>
+                    <div class="hb">
+                        <p>Every receipt has a status. It shows as a chip in the queue and in the <b>Review</b> panel at the top of the Inspector.</p>
+                        <table class="help-table">
+                            <tr><td><span class="chip chip-medium">Captured</span></td><td>Just scanned or entered. Not yet checked.</td></tr>
+                            <tr><td><span class="chip chip-high">Needs review</span></td><td>Someone has to look at it. A receipt moves here by itself when it has an unresolved High flag, or when an approved receipt is edited. It never moves back on its own.</td></tr>
+                            <tr><td><span class="chip chip-ok">Approved</span></td><td>Checked and ready to export. It can still be edited, but an edit takes the approval away and the receipt goes back to Needs review (the audit log records it).</td></tr>
+                            <tr><td><span class="chip chip-dark">Exported</span></td><td>Included in an export batch. <b>Locked</b>: its fields, lines and delete button are disabled until you reopen it.</td></tr>
+                        </table>
+                    </div>
+                    <div class="hb">
+                        <h3>Approving</h3>
+                        <p>Click <b>Approve</b> in the Review panel. The app checks the receipt first. Anything that stops it is listed under <i>Can&rsquo;t approve yet</i>: a blank merchant; a date that is not a real calendar date (fix it with the date box); a Paid From account or van that is archived; a total of zero; a receipt with no lines; a line on an archived account; or an unresolved High flag.</p>
+                        <p>Approving records your name in the audit log. The app asks for it the first time. The name is a label you type, not a login: anyone using this browser can type any name. You can change it in the <b>Audit Log</b> window.</p>
+                    </div>
+                    <div class="hb">
+                        <h3>Accepting a High flag</h3>
+                        <p>A High flag blocks approval until someone accepts it. Click <b>Accept with reason&hellip;</b> under the flag and write why it is acceptable (at least a few characters). The reason is stored with the receipt and in the audit log. Medium and low flags never block approval.</p>
+                        <div class="help-callout tip"><b>The acceptance follows the flag.</b> It is tied to the flag&rsquo;s code and text, and the text includes the item and amount. If the amount changes, the flag comes back and needs accepting again.</div>
+                    </div>
+                    <div class="hb">
+                        <h3>Sending back and reopening</h3>
+                        <ul>
+                            <li><b>Send back to review</b> moves an approved receipt to Needs review, for example when you spot a problem before exporting.</li>
+                            <li><b>Reopen for correction&hellip;</b> works on an exported receipt. You must say what needs correcting. The receipt returns to Needs review. The next export batch marks it as a correction: in the .QBO file its transaction id gets the suffix <code>-r1</code> (then <code>-r2</code> and so on), and the memo starts with <code>CORRECTION r1</code>. The batch you already downloaded does not change.</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- ================= AUDIT LOG ================= -->
+                <section class="help-sec" id="help-auditlog" data-title="Audit log" data-icon="history">
+                    <h2>Audit log</h2>
+                    <div class="hb">
+                        <p>The <b>Audit Log</b> button in the top bar lists the changes the app recorded: a receipt added (and from where: upload, camera, scan folder, drag &amp; drop, sample or undo); a field or line changed; a line added or deleted; a status change; an accepted flag; a batch created or downloaded; a receipt reopened; receipts removed, including by <b>Clear all</b>; changes to the chart of accounts, the Paid From and van lists, and the CapEx Mode setting. Each entry shows the time, your name and the detail.</p>
+                        <p>Filter by action, or search by receipt, merchant, batch or text. <b>Download log CSV</b> saves the whole log.</p>
+                    </div>
+                    <div class="hb">
+                        <h3>What it can and cannot prove</h3>
+                        <ul>
+                            <li>Each entry is hashed together with the one before it. <b>Verify integrity</b> recomputes the chain and reports the first entry that does not match. Changing or deleting an old entry breaks the chain from that point on.</li>
+                            <li>It is <b>tamper-evident, not tamper-proof</b>. Someone with access to the saved file can rewrite the whole chain. If you need to show a history to someone else, keep dated copies of the save file and of the batch exports.</li>
+                            <li>Names are <b>self-reported</b>. The log records the name typed in the app, not a verified person.</li>
+                            <li>Selecting receipts, filtering, searching, switching looks and opening help are not logged. Derived numbers (splits, flags, tax-inclusive amounts) are not logged either; they follow from the logged edits.</li>
+                            <li>The log is saved with the session file. It survives <b>Delete</b> and <b>Clear all</b>, and those removals are logged.</li>
+                        </ul>
+                    </div>
+                    <div class="hb">
+                        <h3>Files from earlier versions</h3>
+                        <p>A save file made before the review workflow opens normally. Every receipt in it starts at <b>Needs review</b>: nothing is approved on your behalf. The log gets one entry saying the file was migrated.</p>
+                    </div>
+                </section>
+
                 <section class="help-sec" id="help-audit" data-title="Audit flags explained" data-icon="shield-alert">
                     <h2>Audit flags explained</h2>
                     <div class="hb">
                         <p>Flags appear in the <b>Fleet &amp; CapEx Policy Audit</b> section of the Inspector. Each has a colour (severity) and a short code. <button class="text-link help-show" data-show="audit">Show me</button></p>
                         <table class="help-table">
-                            <tr><td><span class="chip chip-high">High</span></td><td>Money or tax treatment is at risk. Resolve before exporting.</td></tr>
+                            <tr><td><span class="chip chip-high">High</span></td><td>Money or tax treatment is at risk. Resolve it, or accept it with a written reason, before you approve. See <a href="#" onclick="helpGo('help-approval');return false">Review and approval</a>.</td></tr>
                             <tr><td><span class="chip chip-medium">Medium</span></td><td>Worth a look; often legitimate (a split receipt, a generous tip).</td></tr>
                             <tr><td><span class="chip chip-low">Low</span></td><td>Missing detail for record-keeping.</td></tr>
                             <tr><td><span class="chip chip-ok">Green</span></td><td>All checks passed.</td></tr>
@@ -483,7 +537,7 @@
                     <div class="hb">
                         <p>Click <b>QBO Export Suite</b>. You get a live preview of the split rows and three download options. <button class="text-link help-show" data-show="exportmodal">Show me</button></p>
                         <div class="help-callout plain lvl-new"><b>In plain English</b> Export makes a file. You then upload that file in QuickBooks (or hand it to your bookkeeper). If you are not sure which, start with <b>Option 1</b>.</div>
-                        <div class="help-callout tip"><b>Before you export:</b> work through the queue and clear the red flags. Tick <i>Exclude Unresolved Math Error Receipts</i> to leave out any receipt still flagged with <code>TOTAL_MATH_ERROR</code> or <code>SUBTOTAL_MISMATCH</code>.</div>
+                        <div class="help-callout tip"><b>Before you export:</b> approve each receipt that checks out, then click <i>Create export batch</i>. The batch takes every approved receipt and <b>locks</b> it. Receipts still in <i>Needs review</i> are left out, and the summary line counts them. The three downloads come from the batch you select in <i>Batch history</i>, and downloading again gives the same files.</div>
                     </div>
                     <div class="hb">
                         <h3>Which option should I use?</h3>
@@ -532,7 +586,7 @@
                                 <li><b>Option 3 (OFX 1.02 SGML):</b> one <code>CCSTMTRS</code> with <code>ACCTID RECEIPTAUDIT-FLEET-4921</code>, <code>TRNTYPE DEBIT</code>, <code>TRNAMT</code> negative total, <code>DTPOSTED</code> = receipt date 12:00:00, <code>FITID</code> = receipt ID, <code>NAME</code> max 32 chars, <code>MEMO</code> max 240 chars, <code>INTU.BID 3000</code>, <code>DTSTART</code> fixed 20260101. Because the account ID is constant, QuickBooks may associate every import with a single account.</li>
                                 <li>Receipt IDs (and therefore FITIDs) are generated at scan time. Re-scanning the same paper creates a new ID, so re-scans are not deduplicated.</li>
                                 <li>Dates that were not ISO (YYYY-MM-DD) in the OCR text are written to CSVs as read. Verify any receipt whose date format looks unusual.</li>
-                                <li>Excluding math-error receipts removes them from all three files and from the preview.</li>
+                                <li>Only receipts in the selected batch are written to the three files and the preview. A receipt reopened for correction is exported with the <code>-rN</code> suffix and the <code>CORRECTION rN</code> memo prefix. Receipts that are not approved are not in any batch.</li>
                             </ul>
                         </div>
                     </div>
@@ -560,7 +614,7 @@
                     <div class="hb">
                         <h3>What is saved &mdash; and what is not</h3>
                         <ul>
-                            <li><b>Saved:</b> every receipt&rsquo;s extracted data and edits, the raw OCR text, your chart of accounts (including added, renamed and re-keyworded accounts and archive status), your Paid From accounts and Fleet / Van classes, your selected receipt, and the CapEx Mode setting.</li>
+                            <li><b>Saved:</b> every receipt&rsquo;s extracted data and edits, the raw OCR text, each receipt&rsquo;s review status and accepted flags, your export batches and the audit log, your name, your chart of accounts (including added, renamed and re-keyworded accounts and archive status), your Paid From accounts and Fleet / Van classes, your selected receipt, and the CapEx Mode setting.</li>
                             <li><b>Saved: a small low-resolution copy of each receipt photo</b> (about 60 KB, black-and-white), kept in the browser and inside your save file so it travels with your work.</li>
                             <li><b>Not saved: the full-size photo.</b> Keep the paper (or the original scan files) filed by date. A restored receipt tells you which date to look under.</li>
                         </ul>
@@ -583,12 +637,12 @@
                         <p>Do this once a year (or whenever the save file gets heavy). It takes about ten minutes. The app has no &ldquo;close year&rdquo; button &mdash; you do it with the buttons you already know, in this order. <b>Do not skip the order:</b> export and archive first, delete last.</p>
                         <ol class="help-steps">
                             <li><b>Finish the year&rsquo;s review.</b> Filter the queue to <i>Audit Flagged Only</i> and clear or knowingly accept every red flag. Check every receipt&rsquo;s merchant, date, amounts and accounts against the paper.</li>
-                            <li><b>Export everything you need.</b> Open <b>QBO Export Suite</b> and download the file(s) you use (see <a href="#" onclick="helpGo('help-export');return false">Exporting to QuickBooks</a>). The exports include <i>every receipt currently in the queue</i>, so do this <i>before</i> you delete anything. The file names carry today&rsquo;s date.</li>
+                            <li><b>Export everything you need.</b> Open <b>QBO Export Suite</b> and download the file(s) you use (see <a href="#" onclick="helpGo('help-export');return false">Exporting to QuickBooks</a>). The exports come from an export batch of <i>approved</i> receipts, so approve and batch the receipts first, and do this <i>before</i> you delete anything. The file names carry today&rsquo;s date.</li>
                             <li><b>Confirm the paper is filed.</b> The app only keeps small low-resolution pictures, so make sure the hard copies for the year are filed by date.</li>
                             <li><b>Make the archive.</b> Wait until the status chip shows <i>Saved&hellip;</i> with your file name, then click <b>Save File</b> and give it a clear name such as <code>receipt-audit-2026-ARCHIVE.json</code> in a safe folder. This writes the whole year to that file.</li>
                             <li><b>Start next year&rsquo;s file.</b> Click <b>Save File</b> <i>again</i> and name it for the new year, for example <code>receipt-audit-2027.json</code>. From now on the app saves to this new file, and the archive is no longer touched.
                                 <div class="help-callout warn"><b>Check the chip</b> It should now show the <i>new</i> file name. If it still shows the archive name, repeat this step &mdash; otherwise the deletions in the next step would change your archive.</div></li>
-                            <li><b>Clear the closed-out receipts.</b> To empty the whole queue, click <b>Clear all</b> above the receipt list. A warning shows how many receipts will go, reminds you to export and archive, and asks you to type <code>CLEAR</code> before the button works. <button class="text-link help-show" data-show="clearall">Show me</button>
+                            <li><b>Clear the closed-out receipts.</b> To empty the whole queue, click <b>Clear all</b> above the receipt list. A warning shows how many receipts will go, reminds you to export and archive, and asks you to type <code>CLEAR</code> before the button works. Exported receipts are removed as well, and each removal is logged. <button class="text-link help-show" data-show="clearall">Show me</button>
                                 <br>To keep a few receipts that still belong to unfinished business, delete the others one at a time with the trash button in the Inspector instead.
                                 <div class="help-callout tip"><b>Changed your mind?</b> Right after clearing, an <b>Undo clear</b> link appears where the button was. It works until you scan another receipt or close or reload the page.</div></li>
                             <li><b>Tidy the accounts (optional).</b> Past the launch phase? Switch <b>CapEx Mode</b> to OFF (Year 2+) and archive launch-only accounts in <b>QBO Accounts</b>. Your account list carries into the new file as it is. Ask your accountant whether it is time.</li>
@@ -606,7 +660,7 @@
                         <div class="help-callout cpa lvl-cpa"><b>For accountants</b> Year-end is a manual copy-and-clear process, not a ledger close: there is no period lock, so the archive is a point-in-time file, not a frozen record. For an evidentiary trail keep the dated exports, the paper originals, and a read-only copy of the archive (and note its modified date). Exports contain every loaded receipt regardless of date, so to produce a single-period export, load only that period&rsquo;s receipts (for example by opening that period&rsquo;s file) before exporting. The chart of accounts and CapEx Mode carry across files unchanged.</div>
                     </div>
                     <div class="hb lvl-cpa">
-                        <div class="help-callout cpa"><b>For accountants</b> Session file: JSON, schema 1 (<code>app: receipt-audit</code>), containing <code>receipts</code>, <code>coaAccounts</code>, <code>selectedReceiptId</code>, <code>startupPhaseMode</code> and <code>savedAt</code>, plus a top-level <code>thumbs</code> map of receipt ID &rarr; JPEG data URL (grayscale, targeted at &le; 60 KB, long edge up to 1,000 px). The images are reference copies only and are not evidence-grade; the file text is rewritten in full after an idle delay of about 4 seconds (at most 30 seconds behind), while the browser copy is updated within half a second. There is no audit trail: edits overwrite prior values, nothing records who changed what, and deleted receipts are gone from the live session. For evidentiary retention rely on the original paper/scan files and dated exports. Browser storage is shared by every copy of the app opened from the same location, so the three look-and-feel variants share one session.</div>
+                        <div class="help-callout cpa"><b>For accountants</b> Session file: JSON, schema 2 (<code>app: receipt-audit</code>), containing <code>receipts</code> (with <code>status</code>, <code>statusAt</code>, <code>statusBy</code>, <code>waivers</code>, <code>batchId</code>, <code>exportedAt</code>, <code>revision</code>), <code>auditLog</code>, <code>batches</code> (each with a frozen snapshot of its receipts), <code>actorName</code>, <code>coaAccounts</code>, <code>selectedReceiptId</code>, <code>startupPhaseMode</code> and <code>savedAt</code>, plus a top-level <code>thumbs</code> map of receipt ID &rarr; JPEG data URL (grayscale, targeted at &le; 60 KB, long edge up to 1,000 px). The images are reference copies only and are not evidence-grade; the file text is rewritten in full after an idle delay of about 4 seconds (at most 30 seconds behind), while the browser copy is updated within half a second. Receipt fields hold the latest value; the history is in <code>auditLog</code>, a hash-chained list of changes (who, when, from, to). The chain is tamper-evident, not tamper-proof, and names are self-reported. Deleted receipts are gone from the live session but stay in the log. For evidentiary retention rely on the original paper/scan files and dated exports. Browser storage is shared by every copy of the app opened from the same location, so the three look-and-feel variants share one session.</div>
                     </div>
                 </section>
 
@@ -645,6 +699,11 @@
                     <div class="hb"><p class="muted">Plain-language definitions, from everyday words to accounting terms.</p></div>
                     <div class="hb"><dl class="help-dl">
                         <dt>Receipt Queue</dt><dd>The list of receipts currently loaded in the app.</dd>
+                        <dt>Captured / Needs review / Approved / Exported</dt><dd>The four review statuses a receipt moves through. Exported receipts are locked until reopened.</dd>
+                        <dt>Export batch</dt><dd>A frozen set of approved receipts created for one export. Its downloads always come from that snapshot, so re-downloading gives the same files.</dd>
+                        <dt>Correction (r1, r2&hellip;)</dt><dd>An exported receipt reopened and exported again. Its transaction id gets the suffix <code>-r1</code> and its memo starts with <code>CORRECTION r1</code>.</dd>
+                        <dt>Accept with reason</dt><dd>Accepting a High flag with a written note. The note and your name are kept with the receipt and in the audit log.</dd>
+                        <dt>Audit log</dt><dd>The list of recorded changes, each entry hashed together with the one before it, so an edited or deleted entry is detectable.</dd>
                         <dt>Inspector</dt><dd>The right-hand panel that shows and lets you edit one receipt.</dd>
                         <dt>OCR (optical character recognition)</dt><dd>Software that turns a picture of text into text a computer can use. It is good but not perfect.</dd>
                         <dt>Chart of accounts (CoA)</dt><dd>The list of accounts your books use to sort income and expenses. Here: the <i>QBO Accounts</i> window.</dd>
@@ -699,7 +758,7 @@
                         <details class="help-faq"><summary>The saved picture of a receipt is too small or blurry to read</summary><p>That is by design &mdash; the app keeps a compact copy (about 60 KB) so the save file stays small and fast. Click the picture to enlarge it, and use the paper receipt filed under the same date when you need the fine print.</p></details>
                         <details class="help-faq"><summary>The save file is getting large, or saving feels slow</summary><p>Expect roughly 4 MB per month at 50 receipts a month. The status chip may say &ldquo;updating file&hellip;&rdquo; for a few seconds after a change; that is normal. If the file lives in a synced folder (OneDrive, Dropbox), a large file re-uploads each time it changes &mdash; keeping it in a local folder and copying it to the cloud as a backup works better. At year-end, follow <a href="#" onclick="helpGo('help-yearend');return false">Closing out a year</a>: archive the old file, link a new one named for the new year, and clear the closed-out receipts.</p></details>
                         <details class="help-faq"><summary>Reading is slow or stuck</summary><p>Large photos take longer. Try a smaller/clearer picture. The first read after opening the app also has to load the reading software from the internet.</p></details>
-                        <details class="help-faq"><summary>Export buttons do nothing</summary><p>There must be at least one receipt in the queue (and not all excluded by the math-error checkbox). Your browser may also have blocked the download &mdash; check its downloads bar or address bar.</p></details>
+                        <details class="help-faq"><summary>Export buttons do nothing</summary><p>Create an export batch first: approve the receipts, then click <i>Create export batch</i>. The downloads come from the selected batch. Your browser may also have blocked the download &mdash; check its downloads bar or address bar.</p></details>
                         <details class="help-faq"><summary>QuickBooks says the file is wrong or the columns do not match</summary><p>Use Option 1 for QuickBooks&rsquo; bank upload. Option 2 is a ledger, not a QuickBooks template. If the .QBO file is rejected, switch to Option 1.</p></details>
                         <details class="help-faq"><summary>Why did a line go to &ldquo;Fixed Assets&rdquo;?</summary><p>Any single line of $2,500 or more (before tax) is filed there automatically. If your accountant says it should be expensed, change that line&rsquo;s account.</p></details>
                         <details class="help-faq"><summary>Which browsers work?</summary><p>Chrome and Edge are fully supported. Scan-folder watching and live save-file updates need Chrome or Edge. Other browsers can use upload, with a manual download for backups.</p></details>
@@ -713,7 +772,7 @@
                     <h2>For accountants: controls &amp; limitations</h2>
                     <div class="hb">
                         <h3>What the app is</h3>
-                        <p>A local, single-user receipt-capture and coding aid. It produces <i>proposed</i> coding and a transaction file. It is <b>not</b> a ledger, has no approvals, no user identities and no change history.</p>
+                        <p>A local, single-user receipt-capture and coding aid. It produces <i>proposed</i> coding and a transaction file. It is <b>not</b> a ledger. It has a review workflow (statuses, approval, High flags accepted with a written reason, export batches that lock receipts, corrections by reopening) and a hash-chained audit log. It has no user identities: names are typed and self-reported.</p>
                     </div>
                     <div class="hb">
                         <h3>Data per receipt</h3>
@@ -722,7 +781,7 @@
                     <div class="hb">
                         <h3>Recommended review procedure</h3>
                         <ol>
-                            <li>Filter the queue to <b>Audit Flagged Only</b>; clear or accept every High flag with a note outside the app.</li>
+                            <li>Filter the queue to <b>Audit Flagged Only</b>; resolve every High flag, or accept it in the app with a written reason (the reason is logged), then approve each receipt.</li>
                             <li>For each receipt confirm merchant/date against the paper (both are editable in the Inspector) and confirm the Paid-From account (default is the first active Paid-From account, the Chase Visa *4921 unless changed, when the card is not recognised).</li>
                             <li>Review the CapEx and Fixed Asset population; confirm tax treatment and elections.</li>
                             <li>Reconcile export: Option 2 split totals per ReceiptRefID equal the receipt total; Option 1/3 totals equal the printed totals.</li>
@@ -734,7 +793,7 @@
                         <ul>
                             <li>OCR accuracy depends on the image; the parser expects &ldquo;description ... price&rdquo; lines and labelled Subtotal/Tax/Tip/Total lines.</li>
                             <li>Scanned lines start at quantity 1; quantity is editable and multiplies unit price in all calculations. Deleting a line does not recalculate the stored Extracted Subtotal &mdash; the subtotal-mismatch flag fires until it is corrected.</li>
-                            <li>There is no edit history: changes to merchant, date, quantities, deleted lines and renamed accounts overwrite the previous value (keep dated session files if you need a trail).</li>
+                            <li>Receipt fields hold only the latest value. The audit log records each change with who, when, from and to, but names are self-reported and the log is tamper-evident rather than tamper-proof. Keep dated session files and batch exports as well.</li>
                             <li>Accounts, Paid From accounts and classes can be added, renamed and archived but never deleted. Their identity is the display name; exports carry the name, so rename them to match QuickBooks.</li>
                             <li>The expense phase is assigned at scan time and is not recalculated when lines are re-coded.</li>
                             <li>No duplicate-receipt detection across receipts (only duplicate lines within one receipt).</li>

@@ -163,6 +163,13 @@ describe('change tracker: workflow effects', () => {
     expect(flagged.receipts[0].status).toBe('needs_review');
   });
 
+  it('a receipt that comes back with its status (undo of Clear all) keeps that status', () => {
+    const approved = { ...receipt(), status: 'approved' as const };
+    const out = applyWorkflowEffects([approved], [{ action: 'receipt.created', receiptId: 'r1' } as LogDraft], SYNC);
+    expect(out.receipts[0]).toBe(approved);
+    expect(out.drafts).toHaveLength(1);
+  });
+
   it('an edit to an approved receipt revokes approval and logs status.changed', () => {
     const approved = { ...receipt(), status: 'approved' as const };
     const drafts = [{ action: 'field.changed', receiptId: 'r1' } as LogDraft];

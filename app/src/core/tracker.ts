@@ -174,6 +174,8 @@ export function applyWorkflowEffects(receipts: Receipt[], drafts: LogDraft[], op
   const updated = receipts.map((r) => {
     if (!r.status && !createdIds.has(r.id)) return r;
     if (createdIds.has(r.id)) {
+      // A receipt that comes back with its status (undo of Clear all) keeps it.
+      if (r.status) return r;
       return { ...r, status: initialStatus(r), statusAt: opts.at, statusBy: opts.actor };
     }
     const from: ReceiptStatus = r.status as ReceiptStatus;

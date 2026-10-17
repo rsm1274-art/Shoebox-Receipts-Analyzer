@@ -14,6 +14,8 @@ const FUNCTIONS = [
 
 export interface Download { content: string; filename: string }
 
+const GOLDEN_BATCH_ID = 'B-GOLDEN';
+
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
 export function createLegacyCore(htmlPath?: string) {
@@ -24,6 +26,7 @@ export function createLegacyCore(htmlPath?: string) {
   const sandbox: Record<string, any> = {
     console, Math, Number, JSON, String, Array, Object, RegExp, parseFloat, isNaN, Map, Set,
     coaAccounts: [], startupPhaseMode: true, paymentAccountList: [], fleetClassList: [], receipts: [],
+    batches: [], wfSelectedBatchId: null,
     document: { getElementById: () => ({ checked: excludeHigh }) },
     triggerBlobDownload: (content: string, filename: string) => { downloads.push({ content, filename }); },
     showToast: () => {}
@@ -39,7 +42,9 @@ export function createLegacyCore(htmlPath?: string) {
   const unique = [...new Set(FUNCTIONS)];
   // a wired release carries the bundled core and a context adapter; load them first when present
   const wired = source.includes('var ReceiptCore =');
-  const names = wired ? ['ReceiptCore', 'coreCtx', ...unique] : unique;
+  // A wired release exports only the selected batch: the harness selects a batch holding the list (see exports()).
+  const batchFns = wired ? ['wfSelectedBatch', 'wfExportList', 'wfCurrentBatchId'] : [];
+  const names = wired ? ['ReceiptCore', 'coreCtx', ...batchFns, ...unique] : unique;
   vm.runInContext(names.map((n) => declarationSource(source, n)).join('\n'), sandbox);
 
   const apply = (ctx: CoreContext) => {
@@ -51,6 +56,8 @@ export function createLegacyCore(htmlPath?: string) {
 
   return {
     audit(receipt: Receipt, ctx: CoreContext): Receipt { apply(ctx); return clone(sandbox.auditAndCategorizeReceipt(clone(receipt))); },
+    // NOTE: wired releases name the file with the batch id (QBO_BankFeed_4Col_<date>_<batch>.csv). The harness selects a
+    // batch, so that suffix is stripped here; the suffix itself is covered by tests/core/batches.test.ts.
     splits(receipt: unknown) { return clone(sandbox.computeProRataSplits(clone(receipt))); },
     infer(item: unknown, ctx: CoreContext): string { apply(ctx); return sandbox.inferLineItemQboCategory(clone(item)); },
     payment(text: string, ctx: CoreContext): string { apply(ctx); return sandbox.mapPaymentMethodToQboAccount(text); },
@@ -61,11 +68,15 @@ export function createLegacyCore(htmlPath?: string) {
     exports(list: Receipt[], excludeMathErrors: boolean) {
       sandbox.receipts = clone(list);
       excludeHigh = excludeMathErrors;
+      if (wired) {
+        sandbox.batches = [{ id: GOLDEN_BATCH_ID, receipts: clone(list), downloads: [] }];
+        sandbox.wfSelectedBatchId = GOLDEN_BATCH_ID;
+      }
       const out: Record<string, Download | null> = {};
       for (const [key, fn] of [['bankFeed', 'downloadQboBankFeedCSV'], ['split', 'downloadQboSplitJournalCSV'], ['webConnect', 'downloadQboWebConnectFile']] as const) {
         downloads.length = 0;
         sandbox[fn]();
-        out[key] = downloads[0] ? { ...downloads[0] } : null;
+        out[key] = downloads[0] ? { ...downloads[0], filename: downloads[0].filename.replace(`_${GOLDEN_BATCH_ID}`, '') } : null;
       }
       return out;
     }

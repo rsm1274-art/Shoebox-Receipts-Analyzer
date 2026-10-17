@@ -1002,6 +1002,7 @@ ${trnBlocks}
     const updated = receipts.map((r) => {
       if (!r.status && !createdIds.has(r.id)) return r;
       if (createdIds.has(r.id)) {
+        if (r.status) return r;
         return { ...r, status: initialStatus(r), statusAt: opts.at, statusBy: opts.actor };
       }
       const from = r.status;

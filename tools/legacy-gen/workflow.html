@@ -1,0 +1,105 @@
+<!-- Your name (self-reported; written into every audit log entry) -->
+    <div id="wfNameModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:460px">
+            <div class="modal-head">
+                <div><h3>Your name</h3><p class="muted">The audit log records who made each change. It is self-reported: it is a label, not a login.</p></div>
+                <button onclick="wfCloseName()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <input id="wfNameInput" class="field" type="text" maxlength="60" placeholder="e.g. Robert" style="width:100%" onkeydown="if (event.key === 'Enter') wfSaveName()">
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                    <button onclick="wfSaveName()" class="btn"><span>Save name</span></button>
+                    <button onclick="wfCloseName()" class="btn btn-ghost"><span>Cancel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accept a High audit flag with a written reason -->
+    <div id="wfAcceptModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:560px">
+            <div class="modal-head">
+                <div><h3>Accept this flag</h3><p class="muted">A High flag blocks approval until someone accepts it with a reason. The reason is kept in the audit log.</p></div>
+                <button onclick="wfCloseAccept()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <p><b id="wfAcceptTitle"></b></p>
+                <p class="muted" id="wfAcceptDetail"></p>
+                <label class="section-label" for="wfAcceptNote" style="margin:0">Why is this acceptable? (required)</label>
+                <textarea id="wfAcceptNote" class="field" rows="3" style="width:100%;resize:vertical" placeholder="e.g. Client dinner, approved by Dana"></textarea>
+                <p id="wfAcceptError" class="mono" style="color:#b00020;margin:0"></p>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                    <button onclick="wfConfirmAccept()" class="btn"><span>Accept flag</span></button>
+                    <button onclick="wfCloseAccept()" class="btn btn-ghost"><span>Cancel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reopen an exported receipt for correction -->
+    <div id="wfReopenModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:560px">
+            <div class="modal-head">
+                <div><h3>Reopen for correction</h3><p class="muted">The receipt goes back to Needs review. The next export batch marks it as a correction (transaction id suffix -rN, memo CORRECTION rN). The batch you already downloaded does not change.</p></div>
+                <button onclick="wfCloseReopen()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <p><b id="wfReopenTitle"></b></p>
+                <label class="section-label" for="wfReopenNote" style="margin:0">What needs correcting? (required)</label>
+                <textarea id="wfReopenNote" class="field" rows="3" style="width:100%;resize:vertical" placeholder="e.g. Wrong account on line 2: fuel, not supplies"></textarea>
+                <p id="wfReopenError" class="mono" style="color:#b00020;margin:0"></p>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                    <button onclick="wfConfirmReopen()" class="btn"><span>Reopen receipt</span></button>
+                    <button onclick="wfCloseReopen()" class="btn btn-ghost"><span>Cancel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit log: every change, who made it and when; tamper-evident hash chain -->
+    <div id="wfLogModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:1040px">
+            <div class="modal-head">
+                <div><h3>Audit Log</h3><p class="muted">Every change to a receipt, batch or setting, with who made it and when. Names are self-reported. The log is tamper-evident (each entry is hashed with the one before it), not tamper-proof.</p></div>
+                <button onclick="wfCloseLog()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center">
+                    <input id="wfLogSearch" class="field" type="search" placeholder="Search receipt, merchant, batch, text" oninput="wfRenderLog()" style="flex:1;min-width:14rem">
+                    <select id="wfLogAction" class="select" onchange="wfRenderLog()">
+                        <option value="all">All actions</option>
+                        <option value="receipt.created">Receipt added</option>
+                        <option value="receipt.deleted">Receipt deleted</option>
+                        <option value="field.changed">Field changed</option>
+                        <option value="item.added">Line added</option>
+                        <option value="item.deleted">Line deleted</option>
+                        <option value="status.changed">Status changed</option>
+                        <option value="flag.accepted">Flag accepted</option>
+                        <option value="batch.created">Batch created</option>
+                        <option value="batch.downloaded">Batch downloaded</option>
+                        <option value="batch.receipt.reopened">Receipt reopened</option>
+                        <option value="session.migrated">Session migrated</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center">
+                    <button onclick="wfVerifyLog()" class="btn btn-ghost"><i data-lucide="shield-check" style="width:14px;height:14px"></i><span>Verify integrity</span></button>
+                    <span id="wfLogVerify" class="chip chip-medium">Not checked yet</span>
+                    <button onclick="wfDownloadLog()" class="btn btn-ghost"><i data-lucide="download" style="width:14px;height:14px"></i><span>Download log CSV</span></button>
+                    <span id="wfLogCount" class="mono muted" style="margin-left:auto"></span>
+                </div>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center">
+                    <label class="section-label" for="wfLogActor" style="margin:0">Your name</label>
+                    <input id="wfLogActor" class="field" type="text" maxlength="60" style="max-width:16rem">
+                    <button onclick="wfSaveActor()" class="btn btn-ghost"><span>Save name</span></button>
+                </div>
+                <div style="overflow:auto;max-height:55vh">
+                    <table>
+                        <thead><tr><th>#</th><th>When</th><th>Who</th><th>Action</th><th>Receipt</th><th>Batch</th><th>Detail</th></tr></thead>
+                        <tbody id="wfLogRows"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->

@@ -145,7 +145,8 @@ def common(out, T):
     b = out.rindex("    </script>")
     intake_js = open(os.path.join(HERE, "intake.js"), encoding="utf-8").read()
     features_js = open(os.path.join(HERE, "features.js"), encoding="utf-8").read() + chr(10) + open(os.path.join(HERE, "thumbs.js"), encoding="utf-8").read()
-    out = out[:a] + (features_js + chr(10) + persist_js + chr(10) + intake_js + chr(10) + open(os.path.join(HERE, "help.js"), encoding="utf-8").read() + chr(10) + open(os.path.join(HERE, "clearall.js"), encoding="utf-8").read()).replace(chr(10), chr(10) + "        ").rstrip() + chr(10) + out[b:]
+    workflow_js = open(os.path.join(HERE, "workflow.js"), encoding="utf-8").read()
+    out = out[:a] + (features_js + chr(10) + workflow_js + chr(10) + persist_js + chr(10) + intake_js + chr(10) + open(os.path.join(HERE, "help.js"), encoding="utf-8").read() + chr(10) + open(os.path.join(HERE, "clearall.js"), encoding="utf-8").read()).replace(chr(10), chr(10) + "        ").rstrip() + chr(10) + out[b:]
 
     PATCHES = [
         # photos are not stored: queue thumbnail falls back to an icon tile
@@ -186,6 +187,39 @@ def common(out, T):
                                 '<button id="btnClearAll" class="text-link hidden" onclick="openClearAll()" title="Remove every receipt from the queue (asks first)">Clear all</button>'
                                 + m.group(1) + '</div>', out, count=1, flags=re.S)
     assert nq == 1, "queue header anchor not found"
+    # ---- review workflow (status chip, panel, flags, export batches, audit log) ----
+    WF_HTML = open(os.path.join(HERE, "workflow.html"), encoding="utf-8").read()
+    WF_HEADER_BTN = ('<button onclick="wfOpenLog()" class="btn btn-ghost" title="Audit log: every change, who made it and when">\n'
+                     '                    <i data-lucide="history" style="width:15px;height:15px"></i>\n'
+                     '                    <span>Audit Log</span>\n                </button>\n                ')
+    WF_EXPORT_CONTROLS = ('<div style="display:flex;flex-direction:column;gap:0.4rem;align-items:flex-end">\n'
+                          '                            <p id="wfExportSummary" class="muted" style="color:#000;margin:0"></p>\n'
+                          '                            <button id="wfCreateBatchBtn" onclick="wfCreateBatch()" class="btn btn-amber">Create export batch</button>\n'
+                          '                        </div>')
+    out, n = re.subn(r'<label style="font-size:12px;font-weight:700;[^"]*">\s*<input type="checkbox" id="chkExcludeHighAnomalies"[^>]*>\s*Exclude Unresolved Math Error Receipts\s*</label>',
+                     lambda m: WF_EXPORT_CONTROLS, out, count=1)
+    assert n == 1, "exclude-math checkbox not found"
+    out, n = re.subn(r"function getExportableReceipts\(\) \{.*?\n        \}",
+                     "function getExportableReceipts() {\n            return wfExportList();\n        }", out, count=1, flags=re.S)
+    assert n == 1, "getExportableReceipts not found"
+    PATCHES += [
+        ("${phaseBadge}", "${wfStatusChip(r)}\n                                ${phaseBadge}"),
+        ('<p class="audit-detail">${a.detail}</p>', '<p class="audit-detail">${a.detail}</p>\n                                ${wfFlagActions(receipt, a)}'),
+        ("<!-- Receipt-Level QBO Metadata Routing Bar -->", "${wfPanelHtml(receipt)}\n\n                    <!-- Receipt-Level QBO Metadata Routing Bar -->"),
+        ('<option value="flagged">Audit Flagged Only</option>',
+         '<option value="flagged">Audit Flagged Only</option>\n                            <option value="needs_review">Needs review</option>\n                            <option value="ready">Ready to export</option>\n                            <option value="exported">Exported</option>'),
+        ("if (filter === 'flagged') return r.anomalies && r.anomalies.length > 0;",
+         "if (filter === 'flagged') return r.anomalies && r.anomalies.length > 0;\n"
+         "                if (filter === 'needs_review') return r.status === 'captured' || r.status === 'needs_review';\n"
+         "                if (filter === 'ready') return r.status === 'approved';\n"
+         "                if (filter === 'exported') return r.status === 'exported';"),
+        ('<p class="kpi-label">Audit Flags &amp; QBO Ready</p>', '<p class="kpi-label">Review Queue</p>'),
+        ('<p id="statAnomalies" class="kpi-value">0</p>', '<p id="statAnomalies" class="kpi-value">0</p>\n                    <p id="statReadySub" class="kpi-sub">0 ready to export</p>'),
+        ('<button id="btnStartupPhase"', WF_HEADER_BTN + '<button id="btnStartupPhase"'),
+        ("<!-- Live Preview of Split Rows -->", '<div id="wfBatchPanel"></div>\n\n                <!-- Live Preview of Split Rows -->'),
+        ("            const list = getExportableReceipts();\n            const previewEl", "            const list = wfPreviewList();\n            const previewEl"),
+        ("<!-- Toast Notification -->", WF_HTML),
+    ]
     for a_, b_ in PATCHES:
         assert out.count(a_) == 1, a_[:60]
         out = out.replace(a_, b_)
@@ -221,6 +255,7 @@ def common(out, T):
 .date-edit .input { padding: 0.15rem 0.35rem; font-size: 12px; }
 td .icon-btn { font-size: 16px; line-height: 1; padding: 0.15rem 0.45rem; }
 """
+    EXTRA_CSS += "#wfCreateBatchBtn:disabled, #wfCreateBatchBtn[disabled] { opacity: 0.45; cursor: not-allowed; }\n"
     EXTRA_CSS += feature_patches.CSS
     EXTRA_CSS += open(os.path.join(HERE, "help.css"), encoding="utf-8").read()
     if T["NAME"] != "Industry City":

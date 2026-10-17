@@ -98,6 +98,9 @@ function buildSessionSnapshot() {
         coaAccounts,
         paymentAccounts: paymentAccountList,
         fleetClasses: fleetClassList,
+        actorName,
+        auditLog,
+        batches,
         receipts: receipts.map(({ imageUrl, thumbUrl, ...rest }) => rest)   // full photos are never persisted; thumbnails are stored separately
     };
 }
@@ -149,10 +152,17 @@ function syncCapexToggleUi() {
         startupPhaseMode ? 'CapEx Mode: ON' : 'CapEx Mode: OFF (Year 2+)';
 }
 async function applySession(s) {
-    coaAccounts = s.coaAccounts;
-    loadManagedLists(s);
-    receipts = s.receipts.map(r => ({ ...r, imageUrl: null, thumbUrl: null }));
+    // Older files (no review workflow yet) get every receipt set to Needs review and a migration entry in the log.
+    const m = ReceiptCore.migrateSession(s, new Date().toISOString(), 'Owner');
+    coaAccounts = m.coaAccounts;
+    loadManagedLists(m);
+    receipts = m.receipts.map(r => ({ ...r, imageUrl: null, thumbUrl: null }));
     await hydrateThumbs(s.thumbs);
+    auditLog = m.auditLog;
+    batches = m.batches;
+    actorName = s.actorName || null;
+    wfSelectedBatchId = batches.length ? batches[batches.length - 1].id : null;
+    wfTracker.seed(receipts);          // restoring must not log every receipt as "created"
     selectedReceiptId = receipts.some(r => r.id === s.selectedReceiptId) ? s.selectedReceiptId : (receipts[0]?.id || null);
     startupPhaseMode = s.startupPhaseMode !== false;
     syncCapexToggleUi();

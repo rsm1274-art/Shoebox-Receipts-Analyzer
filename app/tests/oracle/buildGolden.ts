@@ -37,16 +37,17 @@ export function buildGolden(htmlPath?: string) {
   golden.audit.slice(0, 80).forEach((a: any) => golden.fuel.push({ input: { rawOcrText: a.input.rawOcrText, extraNote: a.input.extraNote, items: a.input.items }, output: legacy.fuel(a.input) }));
   DATES.forEach((d) => golden.dates.push({ input: d ?? null, isUndefined: d === undefined, output: legacy.formatDate(d) }));
 
-  // exports: a few lists drawn from the audited outputs, with and without the math-error filter
+  // exports: a few lists drawn from the audited outputs. The "exclude math-error" variant is no longer recorded:
+  // that checkbox was removed when approval gates export (slice 1); exports now take the selected batch as a whole.
   const lists: Receipt[][] = [
     golden.audit.filter((a: any) => a.variant === 'default').slice(0, 25).map((a: any) => a.output),
     golden.audit.filter((a: any) => a.variant === 'custom-accounts').slice(0, 12).map((a: any) => a.output),
     golden.audit.filter((a: any) => a.variant === 'managed-lists').slice(0, 1).map((a: any) => a.output),
     []
   ];
-  lists.forEach((list, li) => [false, true].forEach((excl) => {
-    golden.exports.push({ list: li, excludeMathErrors: excl, receipts: list, output: legacy.exports(list, excl) });
-  }));
+  lists.forEach((list, li) => {
+    golden.exports.push({ list: li, excludeMathErrors: false, receipts: list, output: legacy.exports(list, false) });
+  });
   golden.memos = golden.audit.slice(0, 60).map((a: any) => ({ input: a.output, output: legacy.memo(a.output) }));
   return golden;
 }

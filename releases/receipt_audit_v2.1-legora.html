@@ -391,6 +391,7 @@ th.num, td.num { text-align: right; }
 .date-edit { display: inline-flex; align-items: center; gap: 0.35rem; }
 .date-edit .input { padding: 0.15rem 0.35rem; font-size: 12px; }
 td .icon-btn { font-size: 16px; line-height: 1; padding: 0.15rem 0.45rem; }
+#wfCreateBatchBtn:disabled, #wfCreateBatchBtn[disabled] { opacity: 0.45; cursor: not-allowed; }
 
 /* --- editable header / quantity / delete line --- */
 .title-input { font: inherit; letter-spacing: inherit; color: inherit; width: 100%; background: transparent; border: 0; border-bottom: 1px dashed rgba(128,128,128,.55); padding: 0; margin: 0; border-radius: 0; }
@@ -546,6 +547,10 @@ button.chip { border: 0; }
                     <i data-lucide="save" style="width:15px;height:15px"></i>
                     <span>Save File</span>
                 </button>
+                <button onclick="wfOpenLog()" class="btn btn-ghost" title="Audit log: every change, who made it and when">
+                    <i data-lucide="history" style="width:15px;height:15px"></i>
+                    <span>Audit Log</span>
+                </button>
                 <button id="btnStartupPhase" onclick="toggleStartupPhaseMode()" class="startup-toggle active" title="Show/Hide Tier 2 CapEx & Upfitting Categories">
                     <span class="startup-dot"></span>
                     <span id="startupModeLabel">CapEx Mode: ON</span>
@@ -641,8 +646,9 @@ button.chip { border: 0; }
 
             <div class="kpi">
                 <div>
-                    <p class="kpi-label">Audit Flags &amp; QBO Ready</p>
+                    <p class="kpi-label">Review Queue</p>
                     <p id="statAnomalies" class="kpi-value">0</p>
+                    <p id="statReadySub" class="kpi-sub">0 ready to export</p>
                     <button onclick="toggleQboExportModal()" class="text-link" style="margin-top:0.5rem">
                         Open QBO Exporter &rarr;
                     </button>
@@ -759,6 +765,9 @@ button.chip { border: 0; }
                             <option value="splits">Multi-Category Splits</option>
                             <option value="startup">CapEx Only</option>
                             <option value="flagged">Audit Flagged Only</option>
+                            <option value="needs_review">Needs review</option>
+                            <option value="ready">Ready to export</option>
+                            <option value="exported">Exported</option>
                         </select></div>
                     </div>
 
@@ -810,10 +819,10 @@ button.chip { border: 0; }
                         </p>
                     </div>
                     <div style="display:flex;flex-wrap:wrap;gap:0.8rem;align-items:center">
-                        <label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:0.4rem;cursor:pointer">
-                            <input type="checkbox" id="chkExcludeHighAnomalies" onchange="renderQboModalPreview()">
-                            Exclude Unresolved Math Error Receipts
-                        </label>
+                        <div style="display:flex;flex-direction:column;gap:0.4rem;align-items:flex-end">
+                            <p id="wfExportSummary" class="muted" style="color:#000;margin:0"></p>
+                            <button id="wfCreateBatchBtn" onclick="wfCreateBatch()" class="btn btn-amber">Create export batch</button>
+                        </div>
                     </div>
                 </div>
 
@@ -864,6 +873,8 @@ button.chip { border: 0; }
                         </button>
                     </div>
                 </div>
+
+                <div id="wfBatchPanel"></div>
 
                 <!-- Live Preview of Split Rows -->
                 <div>
@@ -983,7 +994,7 @@ button.chip { border: 0; }
                             <li><label><input type="checkbox" data-step="5"> <span><b>Protect your work.</b> Click <i>Save File</i> and pick a folder. Now every change is saved twice.</span></label> <button class="text-link help-show" data-show="savefile">Show me</button></li>
                             <li><label><input type="checkbox" data-step="6"> <span><b>Add your own receipt.</b> Upload a photo, use the camera, or point the app at your scanner&rsquo;s folder.</span></label> <button class="text-link help-show" data-show="intake">Show me</button></li>
                             <li><label><input type="checkbox" data-step="7"> <span><b>Look at your accounts.</b> Open <i>QBO Accounts</i> to see the categories the app files things into.</span></label> <button class="text-link help-show" data-show="coa">Show me</button></li>
-                            <li><label><input type="checkbox" data-step="8"> <span><b>Export.</b> Open <i>QBO Export Suite</i> and download a file for QuickBooks.</span></label> <button class="text-link help-show" data-show="export">Show me</button></li>
+                            <li><label><input type="checkbox" data-step="8"> <span><b>Approve, then export.</b> Approve each receipt once it checks out, then open <i>QBO Export Suite</i>, create an export batch from the approved receipts and download a file for QuickBooks.</span></label> <button class="text-link help-show" data-show="export">Show me</button></li>
                         </ol>
                     </div>
                     <div class="hb">
@@ -992,7 +1003,7 @@ button.chip { border: 0; }
                             <li><b>The app suggests; you decide.</b> OCR (text recognition) makes mistakes. Always glance at merchant, date, amounts and accounts before exporting.</li>
                             <li><b>Keep the paper.</b> The app keeps only a small low-resolution copy of each photo (about 60 KB) &mdash; good for a quick look, not for fine print. File the hard copies by date; the app tells you which date to look under.</li>
                             <li><b>Link a save file</b> on day one so a browser problem can never cost you your work.</li>
-                            <li><b>Anything red is a stop sign.</b> Fix it or deliberately accept it before you export.</li>
+                            <li><b>Anything red is a stop sign.</b> Fix it or deliberately accept it (with a written reason) before you approve. Exported receipts are locked.</li>
                         </ul>
                     </div>
                 </section>
@@ -1205,18 +1216,72 @@ button.chip { border: 0; }
                     <div class="hb">
                         <h3>Deleting a receipt</h3>
                         <p>The trash button removes the receipt from the queue <i>and from the saved session</i>, after a confirmation. It cannot be undone, but a save file you made earlier still contains it.</p>
-                        <p><b>Clear all</b> (above the receipt list) removes <i>every</i> receipt at once. It shows a warning with the number of receipts, reminds you to export and make an archive copy, tells you whether a save file is linked (and offers a backup download), and only enables the button after you type <code>CLEAR</code>. Your account list and settings are kept. For a short time afterwards (until you scan another receipt, or close or reload the page) an <b>Undo clear</b> link brings the receipts back.</p>
+                        <p><b>Clear all</b> (above the receipt list) removes <i>every</i> receipt at once. It shows a warning with the number of receipts, reminds you to export and make an archive copy, tells you whether a save file is linked (and offers a backup download), and only enables the button after you type <code>CLEAR</code>. Your account list and settings are kept. Every removal is recorded in the <b>Audit Log</b>, including exported receipts. For a short time afterwards (until you scan another receipt, or close or reload the page) an <b>Undo clear</b> link brings the receipts back.</p>
                         <div class="help-actions"><button class="text-link help-show" data-show="clearall">Show me</button></div>
                     </div>
                 </section>
 
                 <!-- ================= AUDIT FLAGS ================= -->
+                <!-- ================= REVIEW AND APPROVAL ================= -->
+                <section class="help-sec" id="help-approval" data-title="Review and approval" data-icon="badge-check">
+                    <h2>Review and approval</h2>
+                    <div class="hb">
+                        <p>Every receipt has a status. It shows as a chip in the queue and in the <b>Review</b> panel at the top of the Inspector.</p>
+                        <table class="help-table">
+                            <tr><td><span class="chip chip-medium">Captured</span></td><td>Just scanned or entered. Not yet checked.</td></tr>
+                            <tr><td><span class="chip chip-high">Needs review</span></td><td>Someone has to look at it. A receipt moves here by itself when it has an unresolved High flag, or when an approved receipt is edited. It never moves back on its own.</td></tr>
+                            <tr><td><span class="chip chip-ok">Approved</span></td><td>Checked and ready to export. It can still be edited, but an edit takes the approval away and the receipt goes back to Needs review (the audit log records it).</td></tr>
+                            <tr><td><span class="chip chip-dark">Exported</span></td><td>Included in an export batch. <b>Locked</b>: its fields, lines and delete button are disabled until you reopen it.</td></tr>
+                        </table>
+                    </div>
+                    <div class="hb">
+                        <h3>Approving</h3>
+                        <p>Click <b>Approve</b> in the Review panel. The app checks the receipt first. Anything that stops it is listed under <i>Can&rsquo;t approve yet</i>: a blank merchant; a date that is not a real calendar date (fix it with the date box); a Paid From account or van that is archived; a total of zero; a receipt with no lines; a line on an archived account; or an unresolved High flag.</p>
+                        <p>Approving records your name in the audit log. The app asks for it the first time. The name is a label you type, not a login: anyone using this browser can type any name. You can change it in the <b>Audit Log</b> window.</p>
+                    </div>
+                    <div class="hb">
+                        <h3>Accepting a High flag</h3>
+                        <p>A High flag blocks approval until someone accepts it. Click <b>Accept with reason&hellip;</b> under the flag and write why it is acceptable (at least a few characters). The reason is stored with the receipt and in the audit log. Medium and low flags never block approval.</p>
+                        <div class="help-callout tip"><b>The acceptance follows the flag.</b> It is tied to the flag&rsquo;s code and text, and the text includes the item and amount. If the amount changes, the flag comes back and needs accepting again.</div>
+                    </div>
+                    <div class="hb">
+                        <h3>Sending back and reopening</h3>
+                        <ul>
+                            <li><b>Send back to review</b> moves an approved receipt to Needs review, for example when you spot a problem before exporting.</li>
+                            <li><b>Reopen for correction&hellip;</b> works on an exported receipt. You must say what needs correcting. The receipt returns to Needs review. The next export batch marks it as a correction: in the .QBO file its transaction id gets the suffix <code>-r1</code> (then <code>-r2</code> and so on), and the memo starts with <code>CORRECTION r1</code>. The batch you already downloaded does not change.</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- ================= AUDIT LOG ================= -->
+                <section class="help-sec" id="help-auditlog" data-title="Audit log" data-icon="history">
+                    <h2>Audit log</h2>
+                    <div class="hb">
+                        <p>The <b>Audit Log</b> button in the top bar lists the changes the app recorded: a receipt added (and from where: upload, camera, scan folder, drag &amp; drop, sample or undo); a field or line changed; a line added or deleted; a status change; an accepted flag; a batch created or downloaded; a receipt reopened; receipts removed, including by <b>Clear all</b>; changes to the chart of accounts, the Paid From and van lists, and the CapEx Mode setting. Each entry shows the time, your name and the detail.</p>
+                        <p>Filter by action, or search by receipt, merchant, batch or text. <b>Download log CSV</b> saves the whole log.</p>
+                    </div>
+                    <div class="hb">
+                        <h3>What it can and cannot prove</h3>
+                        <ul>
+                            <li>Each entry is hashed together with the one before it. <b>Verify integrity</b> recomputes the chain and reports the first entry that does not match. Changing or deleting an old entry breaks the chain from that point on.</li>
+                            <li>It is <b>tamper-evident, not tamper-proof</b>. Someone with access to the saved file can rewrite the whole chain. If you need to show a history to someone else, keep dated copies of the save file and of the batch exports.</li>
+                            <li>Names are <b>self-reported</b>. The log records the name typed in the app, not a verified person.</li>
+                            <li>Selecting receipts, filtering, searching, switching looks and opening help are not logged. Derived numbers (splits, flags, tax-inclusive amounts) are not logged either; they follow from the logged edits.</li>
+                            <li>The log is saved with the session file. It survives <b>Delete</b> and <b>Clear all</b>, and those removals are logged.</li>
+                        </ul>
+                    </div>
+                    <div class="hb">
+                        <h3>Files from earlier versions</h3>
+                        <p>A save file made before the review workflow opens normally. Every receipt in it starts at <b>Needs review</b>: nothing is approved on your behalf. The log gets one entry saying the file was migrated.</p>
+                    </div>
+                </section>
+
                 <section class="help-sec" id="help-audit" data-title="Audit flags explained" data-icon="shield-alert">
                     <h2>Audit flags explained</h2>
                     <div class="hb">
                         <p>Flags appear in the <b>Fleet &amp; CapEx Policy Audit</b> section of the Inspector. Each has a colour (severity) and a short code. <button class="text-link help-show" data-show="audit">Show me</button></p>
                         <table class="help-table">
-                            <tr><td><span class="chip chip-high">High</span></td><td>Money or tax treatment is at risk. Resolve before exporting.</td></tr>
+                            <tr><td><span class="chip chip-high">High</span></td><td>Money or tax treatment is at risk. Resolve it, or accept it with a written reason, before you approve. See <a href="#" onclick="helpGo('help-approval');return false">Review and approval</a>.</td></tr>
                             <tr><td><span class="chip chip-medium">Medium</span></td><td>Worth a look; often legitimate (a split receipt, a generous tip).</td></tr>
                             <tr><td><span class="chip chip-low">Low</span></td><td>Missing detail for record-keeping.</td></tr>
                             <tr><td><span class="chip chip-ok">Green</span></td><td>All checks passed.</td></tr>
@@ -1424,7 +1489,7 @@ button.chip { border: 0; }
                     <div class="hb">
                         <p>Click <b>QBO Export Suite</b>. You get a live preview of the split rows and three download options. <button class="text-link help-show" data-show="exportmodal">Show me</button></p>
                         <div class="help-callout plain lvl-new"><b>In plain English</b> Export makes a file. You then upload that file in QuickBooks (or hand it to your bookkeeper). If you are not sure which, start with <b>Option 1</b>.</div>
-                        <div class="help-callout tip"><b>Before you export:</b> work through the queue and clear the red flags. Tick <i>Exclude Unresolved Math Error Receipts</i> to leave out any receipt still flagged with <code>TOTAL_MATH_ERROR</code> or <code>SUBTOTAL_MISMATCH</code>.</div>
+                        <div class="help-callout tip"><b>Before you export:</b> approve each receipt that checks out, then click <i>Create export batch</i>. The batch takes every approved receipt and <b>locks</b> it. Receipts still in <i>Needs review</i> are left out, and the summary line counts them. The three downloads come from the batch you select in <i>Batch history</i>, and downloading again gives the same files.</div>
                     </div>
                     <div class="hb">
                         <h3>Which option should I use?</h3>
@@ -1473,7 +1538,7 @@ button.chip { border: 0; }
                                 <li><b>Option 3 (OFX 1.02 SGML):</b> one <code>CCSTMTRS</code> with <code>ACCTID RECEIPTAUDIT-FLEET-4921</code>, <code>TRNTYPE DEBIT</code>, <code>TRNAMT</code> negative total, <code>DTPOSTED</code> = receipt date 12:00:00, <code>FITID</code> = receipt ID, <code>NAME</code> max 32 chars, <code>MEMO</code> max 240 chars, <code>INTU.BID 3000</code>, <code>DTSTART</code> fixed 20260101. Because the account ID is constant, QuickBooks may associate every import with a single account.</li>
                                 <li>Receipt IDs (and therefore FITIDs) are generated at scan time. Re-scanning the same paper creates a new ID, so re-scans are not deduplicated.</li>
                                 <li>Dates that were not ISO (YYYY-MM-DD) in the OCR text are written to CSVs as read. Verify any receipt whose date format looks unusual.</li>
-                                <li>Excluding math-error receipts removes them from all three files and from the preview.</li>
+                                <li>Only receipts in the selected batch are written to the three files and the preview. A receipt reopened for correction is exported with the <code>-rN</code> suffix and the <code>CORRECTION rN</code> memo prefix. Receipts that are not approved are not in any batch.</li>
                             </ul>
                         </div>
                     </div>
@@ -1501,7 +1566,7 @@ button.chip { border: 0; }
                     <div class="hb">
                         <h3>What is saved &mdash; and what is not</h3>
                         <ul>
-                            <li><b>Saved:</b> every receipt&rsquo;s extracted data and edits, the raw OCR text, your chart of accounts (including added, renamed and re-keyworded accounts and archive status), your Paid From accounts and Fleet / Van classes, your selected receipt, and the CapEx Mode setting.</li>
+                            <li><b>Saved:</b> every receipt&rsquo;s extracted data and edits, the raw OCR text, each receipt&rsquo;s review status and accepted flags, your export batches and the audit log, your name, your chart of accounts (including added, renamed and re-keyworded accounts and archive status), your Paid From accounts and Fleet / Van classes, your selected receipt, and the CapEx Mode setting.</li>
                             <li><b>Saved: a small low-resolution copy of each receipt photo</b> (about 60 KB, black-and-white), kept in the browser and inside your save file so it travels with your work.</li>
                             <li><b>Not saved: the full-size photo.</b> Keep the paper (or the original scan files) filed by date. A restored receipt tells you which date to look under.</li>
                         </ul>
@@ -1524,12 +1589,12 @@ button.chip { border: 0; }
                         <p>Do this once a year (or whenever the save file gets heavy). It takes about ten minutes. The app has no &ldquo;close year&rdquo; button &mdash; you do it with the buttons you already know, in this order. <b>Do not skip the order:</b> export and archive first, delete last.</p>
                         <ol class="help-steps">
                             <li><b>Finish the year&rsquo;s review.</b> Filter the queue to <i>Audit Flagged Only</i> and clear or knowingly accept every red flag. Check every receipt&rsquo;s merchant, date, amounts and accounts against the paper.</li>
-                            <li><b>Export everything you need.</b> Open <b>QBO Export Suite</b> and download the file(s) you use (see <a href="#" onclick="helpGo('help-export');return false">Exporting to QuickBooks</a>). The exports include <i>every receipt currently in the queue</i>, so do this <i>before</i> you delete anything. The file names carry today&rsquo;s date.</li>
+                            <li><b>Export everything you need.</b> Open <b>QBO Export Suite</b> and download the file(s) you use (see <a href="#" onclick="helpGo('help-export');return false">Exporting to QuickBooks</a>). The exports come from an export batch of <i>approved</i> receipts, so approve and batch the receipts first, and do this <i>before</i> you delete anything. The file names carry today&rsquo;s date.</li>
                             <li><b>Confirm the paper is filed.</b> The app only keeps small low-resolution pictures, so make sure the hard copies for the year are filed by date.</li>
                             <li><b>Make the archive.</b> Wait until the status chip shows <i>Saved&hellip;</i> with your file name, then click <b>Save File</b> and give it a clear name such as <code>receipt-audit-2026-ARCHIVE.json</code> in a safe folder. This writes the whole year to that file.</li>
                             <li><b>Start next year&rsquo;s file.</b> Click <b>Save File</b> <i>again</i> and name it for the new year, for example <code>receipt-audit-2027.json</code>. From now on the app saves to this new file, and the archive is no longer touched.
                                 <div class="help-callout warn"><b>Check the chip</b> It should now show the <i>new</i> file name. If it still shows the archive name, repeat this step &mdash; otherwise the deletions in the next step would change your archive.</div></li>
-                            <li><b>Clear the closed-out receipts.</b> To empty the whole queue, click <b>Clear all</b> above the receipt list. A warning shows how many receipts will go, reminds you to export and archive, and asks you to type <code>CLEAR</code> before the button works. <button class="text-link help-show" data-show="clearall">Show me</button>
+                            <li><b>Clear the closed-out receipts.</b> To empty the whole queue, click <b>Clear all</b> above the receipt list. A warning shows how many receipts will go, reminds you to export and archive, and asks you to type <code>CLEAR</code> before the button works. Exported receipts are removed as well, and each removal is logged. <button class="text-link help-show" data-show="clearall">Show me</button>
                                 <br>To keep a few receipts that still belong to unfinished business, delete the others one at a time with the trash button in the Inspector instead.
                                 <div class="help-callout tip"><b>Changed your mind?</b> Right after clearing, an <b>Undo clear</b> link appears where the button was. It works until you scan another receipt or close or reload the page.</div></li>
                             <li><b>Tidy the accounts (optional).</b> Past the launch phase? Switch <b>CapEx Mode</b> to OFF (Year 2+) and archive launch-only accounts in <b>QBO Accounts</b>. Your account list carries into the new file as it is. Ask your accountant whether it is time.</li>
@@ -1547,7 +1612,7 @@ button.chip { border: 0; }
                         <div class="help-callout cpa lvl-cpa"><b>For accountants</b> Year-end is a manual copy-and-clear process, not a ledger close: there is no period lock, so the archive is a point-in-time file, not a frozen record. For an evidentiary trail keep the dated exports, the paper originals, and a read-only copy of the archive (and note its modified date). Exports contain every loaded receipt regardless of date, so to produce a single-period export, load only that period&rsquo;s receipts (for example by opening that period&rsquo;s file) before exporting. The chart of accounts and CapEx Mode carry across files unchanged.</div>
                     </div>
                     <div class="hb lvl-cpa">
-                        <div class="help-callout cpa"><b>For accountants</b> Session file: JSON, schema 1 (<code>app: receipt-audit</code>), containing <code>receipts</code>, <code>coaAccounts</code>, <code>selectedReceiptId</code>, <code>startupPhaseMode</code> and <code>savedAt</code>, plus a top-level <code>thumbs</code> map of receipt ID &rarr; JPEG data URL (grayscale, targeted at &le; 60 KB, long edge up to 1,000 px). The images are reference copies only and are not evidence-grade; the file text is rewritten in full after an idle delay of about 4 seconds (at most 30 seconds behind), while the browser copy is updated within half a second. There is no audit trail: edits overwrite prior values, nothing records who changed what, and deleted receipts are gone from the live session. For evidentiary retention rely on the original paper/scan files and dated exports. Browser storage is shared by every copy of the app opened from the same location, so the three look-and-feel variants share one session.</div>
+                        <div class="help-callout cpa"><b>For accountants</b> Session file: JSON, schema 2 (<code>app: receipt-audit</code>), containing <code>receipts</code> (with <code>status</code>, <code>statusAt</code>, <code>statusBy</code>, <code>waivers</code>, <code>batchId</code>, <code>exportedAt</code>, <code>revision</code>), <code>auditLog</code>, <code>batches</code> (each with a frozen snapshot of its receipts), <code>actorName</code>, <code>coaAccounts</code>, <code>selectedReceiptId</code>, <code>startupPhaseMode</code> and <code>savedAt</code>, plus a top-level <code>thumbs</code> map of receipt ID &rarr; JPEG data URL (grayscale, targeted at &le; 60 KB, long edge up to 1,000 px). The images are reference copies only and are not evidence-grade; the file text is rewritten in full after an idle delay of about 4 seconds (at most 30 seconds behind), while the browser copy is updated within half a second. Receipt fields hold the latest value; the history is in <code>auditLog</code>, a hash-chained list of changes (who, when, from, to). The chain is tamper-evident, not tamper-proof, and names are self-reported. Deleted receipts are gone from the live session but stay in the log. For evidentiary retention rely on the original paper/scan files and dated exports. Browser storage is shared by every copy of the app opened from the same location, so the three look-and-feel variants share one session.</div>
                     </div>
                 </section>
 
@@ -1586,6 +1651,11 @@ button.chip { border: 0; }
                     <div class="hb"><p class="muted">Plain-language definitions, from everyday words to accounting terms.</p></div>
                     <div class="hb"><dl class="help-dl">
                         <dt>Receipt Queue</dt><dd>The list of receipts currently loaded in the app.</dd>
+                        <dt>Captured / Needs review / Approved / Exported</dt><dd>The four review statuses a receipt moves through. Exported receipts are locked until reopened.</dd>
+                        <dt>Export batch</dt><dd>A frozen set of approved receipts created for one export. Its downloads always come from that snapshot, so re-downloading gives the same files.</dd>
+                        <dt>Correction (r1, r2&hellip;)</dt><dd>An exported receipt reopened and exported again. Its transaction id gets the suffix <code>-r1</code> and its memo starts with <code>CORRECTION r1</code>.</dd>
+                        <dt>Accept with reason</dt><dd>Accepting a High flag with a written note. The note and your name are kept with the receipt and in the audit log.</dd>
+                        <dt>Audit log</dt><dd>The list of recorded changes, each entry hashed together with the one before it, so an edited or deleted entry is detectable.</dd>
                         <dt>Inspector</dt><dd>The right-hand panel that shows and lets you edit one receipt.</dd>
                         <dt>OCR (optical character recognition)</dt><dd>Software that turns a picture of text into text a computer can use. It is good but not perfect.</dd>
                         <dt>Chart of accounts (CoA)</dt><dd>The list of accounts your books use to sort income and expenses. Here: the <i>QBO Accounts</i> window.</dd>
@@ -1640,7 +1710,7 @@ button.chip { border: 0; }
                         <details class="help-faq"><summary>The saved picture of a receipt is too small or blurry to read</summary><p>That is by design &mdash; the app keeps a compact copy (about 60 KB) so the save file stays small and fast. Click the picture to enlarge it, and use the paper receipt filed under the same date when you need the fine print.</p></details>
                         <details class="help-faq"><summary>The save file is getting large, or saving feels slow</summary><p>Expect roughly 4 MB per month at 50 receipts a month. The status chip may say &ldquo;updating file&hellip;&rdquo; for a few seconds after a change; that is normal. If the file lives in a synced folder (OneDrive, Dropbox), a large file re-uploads each time it changes &mdash; keeping it in a local folder and copying it to the cloud as a backup works better. At year-end, follow <a href="#" onclick="helpGo('help-yearend');return false">Closing out a year</a>: archive the old file, link a new one named for the new year, and clear the closed-out receipts.</p></details>
                         <details class="help-faq"><summary>Reading is slow or stuck</summary><p>Large photos take longer. Try a smaller/clearer picture. The first read after opening the app also has to load the reading software from the internet.</p></details>
-                        <details class="help-faq"><summary>Export buttons do nothing</summary><p>There must be at least one receipt in the queue (and not all excluded by the math-error checkbox). Your browser may also have blocked the download &mdash; check its downloads bar or address bar.</p></details>
+                        <details class="help-faq"><summary>Export buttons do nothing</summary><p>Create an export batch first: approve the receipts, then click <i>Create export batch</i>. The downloads come from the selected batch. Your browser may also have blocked the download &mdash; check its downloads bar or address bar.</p></details>
                         <details class="help-faq"><summary>QuickBooks says the file is wrong or the columns do not match</summary><p>Use Option 1 for QuickBooks&rsquo; bank upload. Option 2 is a ledger, not a QuickBooks template. If the .QBO file is rejected, switch to Option 1.</p></details>
                         <details class="help-faq"><summary>Why did a line go to &ldquo;Fixed Assets&rdquo;?</summary><p>Any single line of $2,500 or more (before tax) is filed there automatically. If your accountant says it should be expensed, change that line&rsquo;s account.</p></details>
                         <details class="help-faq"><summary>Which browsers work?</summary><p>Chrome and Edge are fully supported. Scan-folder watching and live save-file updates need Chrome or Edge. Other browsers can use upload, with a manual download for backups.</p></details>
@@ -1654,7 +1724,7 @@ button.chip { border: 0; }
                     <h2>For accountants: controls &amp; limitations</h2>
                     <div class="hb">
                         <h3>What the app is</h3>
-                        <p>A local, single-user receipt-capture and coding aid. It produces <i>proposed</i> coding and a transaction file. It is <b>not</b> a ledger, has no approvals, no user identities and no change history.</p>
+                        <p>A local, single-user receipt-capture and coding aid. It produces <i>proposed</i> coding and a transaction file. It is <b>not</b> a ledger. It has a review workflow (statuses, approval, High flags accepted with a written reason, export batches that lock receipts, corrections by reopening) and a hash-chained audit log. It has no user identities: names are typed and self-reported.</p>
                     </div>
                     <div class="hb">
                         <h3>Data per receipt</h3>
@@ -1663,7 +1733,7 @@ button.chip { border: 0; }
                     <div class="hb">
                         <h3>Recommended review procedure</h3>
                         <ol>
-                            <li>Filter the queue to <b>Audit Flagged Only</b>; clear or accept every High flag with a note outside the app.</li>
+                            <li>Filter the queue to <b>Audit Flagged Only</b>; resolve every High flag, or accept it in the app with a written reason (the reason is logged), then approve each receipt.</li>
                             <li>For each receipt confirm merchant/date against the paper (both are editable in the Inspector) and confirm the Paid-From account (default is the first active Paid-From account, the Chase Visa *4921 unless changed, when the card is not recognised).</li>
                             <li>Review the CapEx and Fixed Asset population; confirm tax treatment and elections.</li>
                             <li>Reconcile export: Option 2 split totals per ReceiptRefID equal the receipt total; Option 1/3 totals equal the printed totals.</li>
@@ -1675,7 +1745,7 @@ button.chip { border: 0; }
                         <ul>
                             <li>OCR accuracy depends on the image; the parser expects &ldquo;description ... price&rdquo; lines and labelled Subtotal/Tax/Tip/Total lines.</li>
                             <li>Scanned lines start at quantity 1; quantity is editable and multiplies unit price in all calculations. Deleting a line does not recalculate the stored Extracted Subtotal &mdash; the subtotal-mismatch flag fires until it is corrected.</li>
-                            <li>There is no edit history: changes to merchant, date, quantities, deleted lines and renamed accounts overwrite the previous value (keep dated session files if you need a trail).</li>
+                            <li>Receipt fields hold only the latest value. The audit log records each change with who, when, from and to, but names are self-reported and the log is tamper-evident rather than tamper-proof. Keep dated session files and batch exports as well.</li>
                             <li>Accounts, Paid From accounts and classes can be added, renamed and archived but never deleted. Their identity is the display name; exports carry the name, so rename them to match QuickBooks.</li>
                             <li>The expense phase is assigned at scan time and is not recalculated when lines are re-coded.</li>
                             <li>No duplicate-receipt detection across receipts (only duplicate lines within one receipt).</li>
@@ -1746,6 +1816,110 @@ button.chip { border: 0; }
         </div>
     </div>
 
+    <!-- Your name (self-reported; written into every audit log entry) -->
+    <div id="wfNameModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:460px">
+            <div class="modal-head">
+                <div><h3>Your name</h3><p class="muted">The audit log records who made each change. It is self-reported: it is a label, not a login.</p></div>
+                <button onclick="wfCloseName()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <input id="wfNameInput" class="field" type="text" maxlength="60" placeholder="e.g. Robert" style="width:100%" onkeydown="if (event.key === 'Enter') wfSaveName()">
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                    <button onclick="wfSaveName()" class="btn"><span>Save name</span></button>
+                    <button onclick="wfCloseName()" class="btn btn-ghost"><span>Cancel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Accept a High audit flag with a written reason -->
+    <div id="wfAcceptModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:560px">
+            <div class="modal-head">
+                <div><h3>Accept this flag</h3><p class="muted">A High flag blocks approval until someone accepts it with a reason. The reason is kept in the audit log.</p></div>
+                <button onclick="wfCloseAccept()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <p><b id="wfAcceptTitle"></b></p>
+                <p class="muted" id="wfAcceptDetail"></p>
+                <label class="section-label" for="wfAcceptNote" style="margin:0">Why is this acceptable? (required)</label>
+                <textarea id="wfAcceptNote" class="field" rows="3" style="width:100%;resize:vertical" placeholder="e.g. Client dinner, approved by Dana"></textarea>
+                <p id="wfAcceptError" class="mono" style="color:#b00020;margin:0"></p>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                    <button onclick="wfConfirmAccept()" class="btn"><span>Accept flag</span></button>
+                    <button onclick="wfCloseAccept()" class="btn btn-ghost"><span>Cancel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reopen an exported receipt for correction -->
+    <div id="wfReopenModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:560px">
+            <div class="modal-head">
+                <div><h3>Reopen for correction</h3><p class="muted">The receipt goes back to Needs review. The next export batch marks it as a correction (transaction id suffix -rN, memo CORRECTION rN). The batch you already downloaded does not change.</p></div>
+                <button onclick="wfCloseReopen()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <p><b id="wfReopenTitle"></b></p>
+                <label class="section-label" for="wfReopenNote" style="margin:0">What needs correcting? (required)</label>
+                <textarea id="wfReopenNote" class="field" rows="3" style="width:100%;resize:vertical" placeholder="e.g. Wrong account on line 2: fuel, not supplies"></textarea>
+                <p id="wfReopenError" class="mono" style="color:#b00020;margin:0"></p>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+                    <button onclick="wfConfirmReopen()" class="btn"><span>Reopen receipt</span></button>
+                    <button onclick="wfCloseReopen()" class="btn btn-ghost"><span>Cancel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit log: every change, who made it and when; tamper-evident hash chain -->
+    <div id="wfLogModal" class="modal-backdrop hidden">
+        <div class="modal" style="max-width:1040px">
+            <div class="modal-head">
+                <div><h3>Audit Log</h3><p class="muted">Every change to a receipt, batch or setting, with who made it and when. Names are self-reported. The log is tamper-evident (each entry is hashed with the one before it), not tamper-proof.</p></div>
+                <button onclick="wfCloseLog()" class="icon-btn" aria-label="Close"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center">
+                    <input id="wfLogSearch" class="field" type="search" placeholder="Search receipt, merchant, batch, text" oninput="wfRenderLog()" style="flex:1;min-width:14rem">
+                    <select id="wfLogAction" class="select" onchange="wfRenderLog()">
+                        <option value="all">All actions</option>
+                        <option value="receipt.created">Receipt added</option>
+                        <option value="receipt.deleted">Receipt deleted</option>
+                        <option value="field.changed">Field changed</option>
+                        <option value="item.added">Line added</option>
+                        <option value="item.deleted">Line deleted</option>
+                        <option value="status.changed">Status changed</option>
+                        <option value="flag.accepted">Flag accepted</option>
+                        <option value="batch.created">Batch created</option>
+                        <option value="batch.downloaded">Batch downloaded</option>
+                        <option value="batch.receipt.reopened">Receipt reopened</option>
+                        <option value="session.migrated">Session migrated</option>
+                    </select>
+                </div>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center">
+                    <button onclick="wfVerifyLog()" class="btn btn-ghost"><i data-lucide="shield-check" style="width:14px;height:14px"></i><span>Verify integrity</span></button>
+                    <span id="wfLogVerify" class="chip chip-medium">Not checked yet</span>
+                    <button onclick="wfDownloadLog()" class="btn btn-ghost"><i data-lucide="download" style="width:14px;height:14px"></i><span>Download log CSV</span></button>
+                    <span id="wfLogCount" class="mono muted" style="margin-left:auto"></span>
+                </div>
+                <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center">
+                    <label class="section-label" for="wfLogActor" style="margin:0">Your name</label>
+                    <input id="wfLogActor" class="field" type="text" maxlength="60" style="max-width:16rem">
+                    <button onclick="wfSaveActor()" class="btn btn-ghost"><span>Save name</span></button>
+                </div>
+                <div style="overflow:auto;max-height:55vh">
+                    <table>
+                        <thead><tr><th>#</th><th>When</th><th>Who</th><th>Action</th><th>Receipt</th><th>Batch</th><th>Detail</th></tr></thead>
+                        <tbody id="wfLogRows"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toastBanner" class="toast-banner hidden">
         <i data-lucide="check-circle-2" style="width:16px;height:16px"></i>
@@ -1761,6 +1935,7 @@ var ReceiptCore = (() => {
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -1774,12 +1949,14 @@ var ReceiptCore = (() => {
     return to;
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
   // src/core/index.ts
   var index_exports = {};
   __export(index_exports, {
     CAPEX_LINE_THRESHOLD: () => CAPEX_LINE_THRESHOLD,
     CAPEX_THRESHOLD: () => CAPEX_THRESHOLD,
+    ChangeTracker: () => ChangeTracker,
     DEFAULT_COA_ACCOUNTS: () => DEFAULT_COA_ACCOUNTS,
     DEFAULT_FLEET_CLASSES: () => DEFAULT_FLEET_CLASSES,
     DEFAULT_LINE_CATEGORY: () => DEFAULT_LINE_CATEGORY,
@@ -1787,8 +1964,19 @@ var ReceiptCore = (() => {
     EXCESSIVE_TIP_PCT: () => EXCESSIVE_TIP_PCT,
     FIXED_ASSET_ACCOUNT_ID: () => FIXED_ASSET_ACCOUNT_ID,
     FIXED_ASSET_FALLBACK_NAME: () => FIXED_ASSET_FALLBACK_NAME,
+    GENESIS_HASH: () => GENESIS_HASH,
     MATH_TOLERANCE: () => MATH_TOLERANCE,
+    MIN_WAIVER_NOTE_LENGTH: () => MIN_WAIVER_NOTE_LENGTH,
     PAYMENT_MATCH_DEFAULTS: () => PAYMENT_MATCH_DEFAULTS,
+    SESSION_SCHEMA: () => SESSION_SCHEMA,
+    STATUSES: () => STATUSES,
+    TRACKED_LINE_FIELDS: () => TRACKED_LINE_FIELDS,
+    TRACKED_RECEIPT_FIELDS: () => TRACKED_RECEIPT_FIELDS,
+    acceptFlag: () => acceptFlag,
+    appendLogEntries: () => appendLogEntries,
+    appendLogEntry: () => appendLogEntry,
+    applyWorkflowEffects: () => applyWorkflowEffects,
+    approvalBlockers: () => approvalBlockers,
     auditAndCategorizeReceipt: () => auditAndCategorizeReceipt,
     bankFeedFileName: () => bankFeedFileName,
     buildBankFeedCsv: () => buildBankFeedCsv,
@@ -1796,17 +1984,35 @@ var ReceiptCore = (() => {
     buildQboWebConnect: () => buildQboWebConnect,
     buildSplitCsv: () => buildSplitCsv,
     computeProRataSplits: () => computeProRataSplits,
+    correctionRevision: () => correctionRevision,
+    createBatch: () => createBatch,
     defaultContext: () => defaultContext,
     defaultFleetClass: () => defaultFleetClass,
     escapeCsvCell: () => escapeCsvCell,
     exportableReceipts: () => exportableReceipts,
     extractFuelMetadata: () => extractFuelMetadata,
+    flagKey: () => flagKey,
     formatDateForQBO: () => formatDateForQBO,
     getActiveCategories: () => getActiveCategories,
+    hasUnresolvedHighFlag: () => hasUnresolvedHighFlag,
+    hashEntry: () => hashEntry,
     inferLineItemCategory: () => inferLineItemCategory,
+    initialStatus: () => initialStatus,
+    isFlagResolved: () => isFlagResolved,
+    isIsoDate: () => isIsoDate,
     mapPaymentMethodToAccount: () => mapPaymentMethodToAccount,
+    migrateSession: () => migrateSession,
+    nextBatchId: () => nextBatchId,
     parseRawOcrTextToReceipt: () => parseRawOcrTextToReceipt,
+    qboFitId: () => qboFitId,
+    reopenReceipt: () => reopenReceipt,
+    sha256Hex: () => sha256Hex,
     splitCsvFileName: () => splitCsvFileName,
+    stableStringify: () => stableStringify,
+    statusAfterEdit: () => statusAfterEdit,
+    transition: () => transition,
+    verifyLog: () => verifyLog,
+    waiverFor: () => waiverFor,
     webConnectFileName: () => webConnectFileName
   });
 
@@ -2218,13 +2424,22 @@ var ReceiptCore = (() => {
     const str = String(val ?? "");
     return `"${str.replace(/"/g, '""')}"`;
   }
+  function correctionRevision(receipt) {
+    return Number(receipt.revision) || 0;
+  }
+  function qboFitId(receipt) {
+    const rev = correctionRevision(receipt);
+    return rev > 0 ? `${receipt.id}-r${rev}` : receipt.id;
+  }
   function buildQboBankMemo(receipt) {
+    const rev = correctionRevision(receipt);
+    const correctionPrefix = rev > 0 ? `CORRECTION r${rev} | ` : "";
     const splits = receipt.qboSplits || [];
     const splitHint = splits.length > 1 ? `[SPLIT: ${splits.map((s) => `${s.category.split(":")[0]} $${s.qboSplitAmount.toFixed(2)}`).join(" / ")}]` : `[${receipt.category}]`;
     const vanShort = (receipt.vanClass || "General").split(" - ")[0];
     const fuelStr = receipt.fuelMeta ? ` | ${receipt.fuelMeta}` : "";
     const itemsSummary = (receipt.items || []).map((i) => i.name).slice(0, 3).join(", ");
-    return `${receipt.merchant} | ${splitHint} | ${vanShort}${fuelStr} | ${itemsSummary}`;
+    return `${correctionPrefix}${receipt.merchant} | ${splitHint} | ${vanShort}${fuelStr} | ${itemsSummary}`;
   }
   function exportableReceipts(receipts, excludeMathErrors) {
     if (!excludeMathErrors) return receipts;
@@ -2241,7 +2456,8 @@ var ReceiptCore = (() => {
     ]);
     return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   }
-  var bankFeedFileName = (now) => `QBO_BankFeed_4Col_${isoDay(now)}.csv`;
+  var batchSuffix = (batchId) => batchId ? `_${batchId}` : "";
+  var bankFeedFileName = (now, batchId) => `QBO_BankFeed_4Col_${isoDay(now)}${batchSuffix(batchId)}.csv`;
   function buildSplitCsv(list) {
     const headers = [
       "ReceiptRefID",
@@ -2259,7 +2475,9 @@ var ReceiptCore = (() => {
     list.forEach((r) => {
       const auditFlags = (r.anomalies || []).map((a) => a.code).join("; ") || "CLEAN";
       (r.qboSplits || []).forEach((sp) => {
-        const memo = sp.itemNames.join("; ") + (r.fuelMeta ? ` [${r.fuelMeta}]` : "");
+        const rev = correctionRevision(r);
+        const correctionPrefix = rev > 0 ? `CORRECTION r${rev}: ` : "";
+        const memo = correctionPrefix + sp.itemNames.join("; ") + (r.fuelMeta ? ` [${r.fuelMeta}]` : "");
         rows.push([
           escapeCsvCell(r.id),
           formatDateForQBO(r.date),
@@ -2276,7 +2494,7 @@ var ReceiptCore = (() => {
     });
     return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   }
-  var splitCsvFileName = (now) => `QBO_Detailed_Splits_${isoDay(now)}.csv`;
+  var splitCsvFileName = (now, batchId) => `QBO_Detailed_Splits_${isoDay(now)}${batchSuffix(batchId)}.csv`;
   function buildQboWebConnect(list, now) {
     const nowStamp = now.toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
     const trnBlocks = list.map((r) => {
@@ -2288,7 +2506,7 @@ var ReceiptCore = (() => {
 <TRNTYPE>DEBIT
 <DTPOSTED>${dtPosted}
 <TRNAMT>-${Number(r.total || 0).toFixed(2)}
-<FITID>${r.id}
+<FITID>${qboFitId(r)}
 <NAME>${cleanName}
 <MEMO>${cleanMemo}
 </STMTTRN>`;
@@ -2329,7 +2547,566 @@ ${trnBlocks}
 </CREDITCARDMSGSRSV1>
 </OFX>`;
   }
-  var webConnectFileName = (now) => `ReceiptAudit_${isoDay(now)}.qbo`;
+  var webConnectFileName = (now, batchId) => `ReceiptAudit_${isoDay(now)}${batchSuffix(batchId)}.qbo`;
+
+  // src/core/sha256.ts
+  var K = new Uint32Array([
+    1116352408,
+    1899447441,
+    3049323471,
+    3921009573,
+    961987163,
+    1508970993,
+    2453635748,
+    2870763221,
+    3624381080,
+    310598401,
+    607225278,
+    1426881987,
+    1925078388,
+    2162078206,
+    2614888103,
+    3248222580,
+    3835390401,
+    4022224774,
+    264347078,
+    604807628,
+    770255983,
+    1249150122,
+    1555081692,
+    1996064986,
+    2554220882,
+    2821834349,
+    2952996808,
+    3210313671,
+    3336571891,
+    3584528711,
+    113926993,
+    338241895,
+    666307205,
+    773529912,
+    1294757372,
+    1396182291,
+    1695183700,
+    1986661051,
+    2177026350,
+    2456956037,
+    2730485921,
+    2820302411,
+    3259730800,
+    3345764771,
+    3516065817,
+    3600352804,
+    4094571909,
+    275423344,
+    430227734,
+    506948616,
+    659060556,
+    883997877,
+    958139571,
+    1322822218,
+    1537002063,
+    1747873779,
+    1955562222,
+    2024104815,
+    2227730452,
+    2361852424,
+    2428436474,
+    2756734187,
+    3204031479,
+    3329325298
+  ]);
+  function rotr(x, n) {
+    return x >>> n | x << 32 - n;
+  }
+  function sha256Hex(text) {
+    const bytes = new TextEncoder().encode(text);
+    const bitLength = bytes.length * 8;
+    const paddedLength = bytes.length + 9 + 63 >> 6 << 6;
+    const data = new Uint8Array(paddedLength);
+    data.set(bytes);
+    data[bytes.length] = 128;
+    const view = new DataView(data.buffer);
+    view.setUint32(paddedLength - 8, Math.floor(bitLength / 4294967296));
+    view.setUint32(paddedLength - 4, bitLength >>> 0);
+    const h = new Uint32Array([
+      1779033703,
+      3144134277,
+      1013904242,
+      2773480762,
+      1359893119,
+      2600822924,
+      528734635,
+      1541459225
+    ]);
+    const w = new Uint32Array(64);
+    for (let off = 0; off < paddedLength; off += 64) {
+      for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+      for (let i = 16; i < 64; i++) {
+        const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ w[i - 15] >>> 3;
+        const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ w[i - 2] >>> 10;
+        w[i] = w[i - 16] + s0 + w[i - 7] + s1 >>> 0;
+      }
+      let a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+      for (let i = 0; i < 64; i++) {
+        const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        const ch = e & f ^ ~e & g;
+        const t1 = hh + S1 + ch + K[i] + w[i] >>> 0;
+        const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        const maj = a & b ^ a & c ^ b & c;
+        const t2 = S0 + maj >>> 0;
+        hh = g;
+        g = f;
+        f = e;
+        e = d + t1 >>> 0;
+        d = c;
+        c = b;
+        b = a;
+        a = t1 + t2 >>> 0;
+      }
+      h[0] = h[0] + a >>> 0;
+      h[1] = h[1] + b >>> 0;
+      h[2] = h[2] + c >>> 0;
+      h[3] = h[3] + d >>> 0;
+      h[4] = h[4] + e >>> 0;
+      h[5] = h[5] + f >>> 0;
+      h[6] = h[6] + g >>> 0;
+      h[7] = h[7] + hh >>> 0;
+    }
+    let hex = "";
+    for (let i = 0; i < 8; i++) hex += h[i].toString(16).padStart(8, "0");
+    return hex;
+  }
+
+  // src/core/auditlog.ts
+  var GENESIS_HASH = "0".repeat(64);
+  function stableStringify(value) {
+    if (value === void 0) return "null";
+    if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+    if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
+    const obj = value;
+    const keys = Object.keys(obj).filter((k) => obj[k] !== void 0).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+  }
+  var nul = (v) => v === void 0 ? null : v;
+  function hashEntry(e) {
+    return sha256Hex(stableStringify([
+      e.seq,
+      e.at,
+      e.actor,
+      e.action,
+      nul(e.receiptId),
+      nul(e.batchId),
+      nul(e.field),
+      nul(e.line),
+      nul(e.from),
+      nul(e.to),
+      nul(e.note),
+      e.prev
+    ]));
+  }
+  function appendLogEntry(log, draft2) {
+    const last = log[log.length - 1];
+    const seq = last ? last.seq + 1 : 1;
+    const prev = last ? last.hash : GENESIS_HASH;
+    const withoutHash = { ...draft2, seq, prev };
+    return [...log, { ...withoutHash, hash: hashEntry(withoutHash) }];
+  }
+  function appendLogEntries(log, drafts) {
+    return drafts.reduce((acc, d) => appendLogEntry(acc, d), [...log]);
+  }
+  function verifyLog(log) {
+    let prev = GENESIS_HASH;
+    for (let i = 0; i < log.length; i++) {
+      const e = log[i];
+      if (e.seq !== i + 1) return { ok: false, seq: e.seq, reason: `sequence should be ${i + 1}, found ${e.seq}` };
+      if (e.prev !== prev) return { ok: false, seq: e.seq, reason: "previous hash does not match the entry before it" };
+      if (hashEntry(e) !== e.hash) return { ok: false, seq: e.seq, reason: "entry contents do not match their hash" };
+      prev = e.hash;
+    }
+    return { ok: true };
+  }
+
+  // src/core/workflow.ts
+  var STATUSES = ["captured", "needs_review", "approved", "exported"];
+  var MIN_WAIVER_NOTE_LENGTH = 3;
+  var TRANSITIONS = {
+    captured: { escalate: "needs_review", send_back: "needs_review", approve: "approved", edit: "captured" },
+    needs_review: { escalate: "needs_review", send_back: "needs_review", approve: "approved", edit: "needs_review" },
+    approved: { escalate: "needs_review", send_back: "needs_review", edit: "needs_review", export: "exported" },
+    exported: { reopen: "needs_review" }
+  };
+  function transition(status, event) {
+    return TRANSITIONS[status][event] ?? null;
+  }
+  function initialStatus(receipt) {
+    return hasUnresolvedHighFlag(receipt) ? "needs_review" : "captured";
+  }
+  function statusAfterEdit(status) {
+    return transition(status, "edit") ?? status;
+  }
+  function flagKey(anomaly) {
+    return `${anomaly.code}|${anomaly.title}`;
+  }
+  function waiverFor(receipt, anomaly) {
+    const key = flagKey(anomaly);
+    return (receipt.waivers || []).find((w) => w.key === key);
+  }
+  function isFlagResolved(receipt, anomaly) {
+    return anomaly.severity !== "high" || waiverFor(receipt, anomaly) !== void 0;
+  }
+  function hasUnresolvedHighFlag(receipt) {
+    return (receipt.anomalies || []).some((a) => !isFlagResolved(receipt, a));
+  }
+  function acceptFlag(anomaly, note, by, at) {
+    const trimmed = (note || "").trim();
+    if (trimmed.length < MIN_WAIVER_NOTE_LENGTH) {
+      return { ok: false, error: `Write a reason of at least ${MIN_WAIVER_NOTE_LENGTH} characters.` };
+    }
+    return { ok: true, waiver: { code: anomaly.code, key: flagKey(anomaly), note: trimmed, by, at } };
+  }
+  function isIsoDate(value) {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [y, m, d] = value.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+  }
+  function approvalBlockers(receipt, ctx) {
+    const blockers = [];
+    if (!receipt.merchant || !receipt.merchant.trim()) blockers.push("Merchant is empty.");
+    if (!isIsoDate(receipt.date)) blockers.push("Date is not a real YYYY-MM-DD date. Fix it with the date box.");
+    if (!ctx.paymentAccounts.some((a) => a.name === receipt.paidFromAccount && !a.archived)) {
+      blockers.push("Paid-from account is missing or archived.");
+    }
+    if (!ctx.fleetClasses.some((c) => c.name === receipt.vanClass && !c.archived)) {
+      blockers.push("Van is missing or archived.");
+    }
+    if (!(Number(receipt.total) > 0)) blockers.push("Total must be greater than zero.");
+    const items = receipt.items || [];
+    if (items.length === 0) blockers.push("Receipt has no line items.");
+    const active = getActiveCategories(ctx);
+    items.forEach((item, i) => {
+      if (!active.some((c) => c.name === item.category)) {
+        blockers.push(`Line ${i + 1} ("${item.name}") is on an inactive or missing account.`);
+      }
+    });
+    for (const a of receipt.anomalies || []) {
+      if (!isFlagResolved(receipt, a)) blockers.push(`Unresolved High flag: ${a.title}`);
+    }
+    return blockers;
+  }
+
+  // src/core/tracker.ts
+  var TRACKED_RECEIPT_FIELDS = [
+    "merchant",
+    "date",
+    "paidFromAccount",
+    "vanClass",
+    "expensePhase",
+    "subtotal",
+    "tax",
+    "tip",
+    "total"
+  ];
+  var TRACKED_LINE_FIELDS = ["name", "qty", "price", "category", "manualCategory"];
+  var norm = (v) => v === void 0 ? null : v;
+  var same = (a, b) => a === b;
+  var pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, norm(obj[k])]));
+  var lineKey = (l) => `${l.name}|${l.qty}|${l.price}`;
+  function snapshotOf(r) {
+    return {
+      fields: pick(r, TRACKED_RECEIPT_FIELDS),
+      lines: (r.items || []).map((item) => pick(item, TRACKED_LINE_FIELDS))
+    };
+  }
+  function draft(opts, action, receiptId, extra = {}) {
+    return {
+      at: opts.at,
+      actor: opts.actor,
+      action,
+      receiptId,
+      batchId: null,
+      field: null,
+      line: null,
+      from: null,
+      to: null,
+      note: null,
+      ...extra
+    };
+  }
+  function findRemovalIndex(longer, shorter) {
+    for (const key of [lineKey, (l) => String(l.name)]) {
+      const target = shorter.map(key).join("\n");
+      for (let j = 0; j < longer.length; j++) {
+        const without = longer.filter((_, i) => i !== j).map(key).join("\n");
+        if (without === target) return j;
+      }
+    }
+    return -1;
+  }
+  function diffLineFields(receiptId, prev, next, line, opts) {
+    const out = [];
+    for (const f of TRACKED_LINE_FIELDS) {
+      if (same(prev[f], next[f])) continue;
+      const note = f === "category" ? next.manualCategory ? "manual" : "auto" : null;
+      out.push(draft(opts, "field.changed", receiptId, { field: f, line, from: prev[f], to: next[f], note }));
+    }
+    return out;
+  }
+  function diffReceipt(receiptId, prev, next, opts) {
+    const out = [];
+    for (const f of TRACKED_RECEIPT_FIELDS) {
+      if (!same(prev.fields[f], next.fields[f])) {
+        out.push(draft(opts, "field.changed", receiptId, { field: f, from: prev.fields[f], to: next.fields[f] }));
+      }
+    }
+    const a = prev.lines;
+    const b = next.lines;
+    if (a.length === b.length) {
+      a.forEach((line, i) => out.push(...diffLineFields(receiptId, line, b[i], i + 1, opts)));
+      return out;
+    }
+    if (Math.abs(a.length - b.length) === 1) {
+      const added = b.length > a.length;
+      const j = added ? findRemovalIndex(b, a) : findRemovalIndex(a, b);
+      if (j >= 0) {
+        const changed = added ? b[j] : a[j];
+        out.push(draft(opts, added ? "item.added" : "item.deleted", receiptId, {
+          line: j + 1,
+          [added ? "to" : "from"]: changed.name
+        }));
+        const keptPrev = added ? a : a.filter((_, i) => i !== j);
+        const keptNext = added ? b.filter((_, i) => i !== j) : b;
+        keptPrev.forEach((line, k) => {
+          const lineNo = added ? k < j ? k + 1 : k + 2 : k + 1;
+          out.push(...diffLineFields(receiptId, line, keptNext[k], lineNo, opts));
+        });
+        return out;
+      }
+    }
+    const extra = Math.abs(a.length - b.length);
+    for (let i = 0; i < extra; i++) {
+      out.push(draft(opts, a.length < b.length ? "item.added" : "item.deleted", receiptId));
+    }
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) out.push(...diffLineFields(receiptId, a[i], b[i], i + 1, opts));
+    return out;
+  }
+  var ChangeTracker = class {
+    constructor() {
+      __publicField(this, "snaps", /* @__PURE__ */ new Map());
+    }
+    /** Starts tracking without logging anything. Call after load and migration, so restore never logs "created". */
+    seed(receipts) {
+      this.snaps = new Map(receipts.map((r) => [r.id, snapshotOf(r)]));
+    }
+    /** Log drafts for everything that changed since the last sync. A no-op sync returns []. */
+    sync(receipts, opts) {
+      const drafts = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const r of receipts) {
+        seen.add(r.id);
+        const next = snapshotOf(r);
+        const prev = this.snaps.get(r.id);
+        if (!prev) {
+          drafts.push(draft(opts, "receipt.created", r.id, { note: opts.source ?? null }));
+        } else {
+          drafts.push(...diffReceipt(r.id, prev, next, opts));
+        }
+        this.snaps.set(r.id, next);
+      }
+      for (const id of [...this.snaps.keys()]) {
+        if (!seen.has(id)) {
+          drafts.push(draft(opts, "receipt.deleted", id, { note: opts.reason ?? null }));
+          this.snaps.delete(id);
+        }
+      }
+      return drafts;
+    }
+  };
+  var EDIT_ACTIONS = /* @__PURE__ */ new Set(["field.changed", "item.added", "item.deleted"]);
+  function applyWorkflowEffects(receipts, drafts, opts) {
+    const createdIds = new Set(drafts.filter((d) => d.action === "receipt.created").map((d) => d.receiptId));
+    const editedIds = new Set(drafts.filter((d) => EDIT_ACTIONS.has(d.action)).map((d) => d.receiptId));
+    const extra = [];
+    const updated = receipts.map((r) => {
+      if (!r.status && !createdIds.has(r.id)) return r;
+      if (createdIds.has(r.id)) {
+        if (r.status) return r;
+        return { ...r, status: initialStatus(r), statusAt: opts.at, statusBy: opts.actor };
+      }
+      const from = r.status;
+      if (from === "captured" && hasUnresolvedHighFlag(r)) {
+        extra.push(statusDraft(opts, r.id, from, "needs_review", "auto escalation: unresolved High flag"));
+        return { ...r, status: "needs_review", statusAt: opts.at, statusBy: opts.actor };
+      }
+      if (editedIds.has(r.id)) {
+        const to = statusAfterEdit(from);
+        if (to !== from) {
+          extra.push(statusDraft(opts, r.id, from, to, "edited after approval"));
+          return { ...r, status: to, statusAt: opts.at, statusBy: opts.actor };
+        }
+      }
+      return r;
+    });
+    return { receipts: updated, drafts: [...drafts, ...extra] };
+  }
+  function statusDraft(opts, receiptId, from, to, note) {
+    return {
+      at: opts.at,
+      actor: opts.actor,
+      action: "status.changed",
+      receiptId,
+      batchId: null,
+      field: "status",
+      line: null,
+      from,
+      to,
+      note
+    };
+  }
+
+  // src/core/batches.ts
+  var isoDay2 = (now) => now.toISOString().slice(0, 10);
+  function nextBatchId(batches, now) {
+    const prefix = `B-${isoDay2(now).replace(/-/g, "")}-`;
+    const n = batches.filter((b) => b.id.startsWith(prefix)).length + 1;
+    return `${prefix}${n}`;
+  }
+  function batchSnapshot(r) {
+    const { imageUrl: _image, thumbUrl: _thumb, ...rest } = r;
+    return JSON.parse(JSON.stringify(rest));
+  }
+  function createBatch(receipts, batches, actor, now) {
+    const approved = receipts.filter((r) => r.status === "approved");
+    if (approved.length === 0) return { ok: false, error: "No approved receipts to export." };
+    const at = now.toISOString();
+    const id = nextBatchId(batches, now);
+    const locked = /* @__PURE__ */ new Map();
+    for (const r of approved) {
+      locked.set(r.id, { ...r, status: "exported", statusAt: at, statusBy: actor, batchId: id, exportedAt: at });
+    }
+    const snapshot = approved.map((r) => batchSnapshot(locked.get(r.id)));
+    const total = Math.round(approved.reduce((sum, r) => sum + (Number(r.total) || 0), 0) * 100) / 100;
+    const batch = {
+      id,
+      at,
+      actor,
+      receiptIds: approved.map((r) => r.id),
+      count: approved.length,
+      total,
+      downloads: [],
+      corrections: approved.filter((r) => (r.revision || 0) > 0).map((r) => r.id),
+      receipts: snapshot
+    };
+    const drafts = [
+      { at, actor, action: "batch.created", receiptId: null, batchId: id, field: null, line: null, from: null, to: null, note: `${batch.count} receipts` },
+      ...approved.map((r) => ({
+        at,
+        actor,
+        action: "status.changed",
+        receiptId: r.id,
+        batchId: id,
+        field: "status",
+        line: null,
+        from: "approved",
+        to: "exported",
+        note: null
+      }))
+    ];
+    return {
+      ok: true,
+      batch,
+      receipts: receipts.map((r) => locked.get(r.id) ?? r),
+      batches: [...batches, batch],
+      drafts
+    };
+  }
+  function reopenReceipt(receipt, reason, actor, now) {
+    if (receipt.status !== "exported") return { ok: false, error: "Only exported receipts can be reopened." };
+    const note = (reason || "").trim();
+    if (note.length < MIN_WAIVER_NOTE_LENGTH) {
+      return { ok: false, error: `Write a reason of at least ${MIN_WAIVER_NOTE_LENGTH} characters.` };
+    }
+    const at = now.toISOString();
+    const to = transition("exported", "reopen");
+    if (to === null) return { ok: false, error: "This receipt cannot be reopened." };
+    const oldRevision = receipt.revision || 0;
+    const newRevision = oldRevision + 1;
+    const reopened = { ...receipt, status: to, statusAt: at, statusBy: actor, revision: newRevision };
+    const drafts = [
+      {
+        at,
+        actor,
+        action: "batch.receipt.reopened",
+        receiptId: receipt.id,
+        batchId: receipt.batchId ?? null,
+        field: "revision",
+        line: null,
+        from: oldRevision,
+        to: newRevision,
+        note
+      },
+      {
+        at,
+        actor,
+        action: "status.changed",
+        receiptId: receipt.id,
+        batchId: receipt.batchId ?? null,
+        field: "status",
+        line: null,
+        from: "exported",
+        to,
+        note: "reopened"
+      }
+    ];
+    return { ok: true, receipt: reopened, drafts };
+  }
+
+  // src/core/migrate.ts
+  var SESSION_SCHEMA = 2;
+  function migrateSession(session, at, actor) {
+    const fromSchema = session.schema ?? 1;
+    if (fromSchema > SESSION_SCHEMA) {
+      throw new Error(`This file was saved by a newer version (schema ${fromSchema}). Update the app to open it.`);
+    }
+    let needsReview = 0;
+    const receipts = (session.receipts || []).map((r) => {
+      const withDefaults = {
+        ...r,
+        waivers: r.waivers ?? [],
+        batchId: r.batchId ?? null,
+        exportedAt: r.exportedAt ?? null,
+        revision: r.revision ?? 0
+      };
+      if (r.status) return withDefaults;
+      needsReview += 1;
+      return { ...withDefaults, status: "needs_review", statusAt: at, statusBy: actor };
+    });
+    let auditLog = [...session.auditLog || []];
+    if (receipts.length > 0 && auditLog.length === 0) {
+      auditLog = appendLogEntry(auditLog, {
+        at,
+        actor,
+        action: "session.migrated",
+        receiptId: null,
+        batchId: null,
+        field: null,
+        line: null,
+        from: fromSchema,
+        to: SESSION_SCHEMA,
+        note: `Migrated from schema ${fromSchema}; ${needsReview} receipts set to Needs review`
+      });
+    }
+    return {
+      ...session,
+      schema: SESSION_SCHEMA,
+      receipts,
+      auditLog,
+      batches: session.batches || [],
+      actorName: session.actorName || actor
+    };
+  }
   return __toCommonJS(index_exports);
 })();
 
@@ -2885,6 +3662,9 @@ ${trnBlocks}
                 if (filter === 'splits') return (r.qboSplits || []).length > 1;
                 if (filter === 'startup') return r.expensePhase === 'CapEx (One-Off)' || (r.qboSplits || []).some(s => (s.category.includes('CapEx') || s.category.includes('Startup')) || s.category.includes('Fixed Assets'));
                 if (filter === 'flagged') return r.anomalies && r.anomalies.length > 0;
+                if (filter === 'needs_review') return r.status === 'captured' || r.status === 'needs_review';
+                if (filter === 'ready') return r.status === 'approved';
+                if (filter === 'exported') return r.status === 'exported';
                 return true;
             });
 
@@ -2925,6 +3705,7 @@ ${trnBlocks}
                         <div class="receipt-side">
                             <span class="amount">$${Number(r.total).toFixed(2)}</span>
                             <div style="display:flex;gap:0.35rem;flex-wrap:wrap;justify-content:flex-end">
+                                ${wfStatusChip(r)}
                                 ${phaseBadge}
                                 ${splitBadge}
                             </div>
@@ -3007,6 +3788,7 @@ ${trnBlocks}
                                     <span class="audit-code">${a.code}</span>
                                 </div>
                                 <p class="audit-detail">${a.detail}</p>
+                                ${wfFlagActions(receipt, a)}
                             </div>
                         </div>
                     `).join('')
@@ -3076,6 +3858,8 @@ ${trnBlocks}
                             </button>
                         </div>
                     </div>
+
+                    ${wfPanelHtml(receipt)}
 
                     <!-- Receipt-Level QBO Metadata Routing Bar -->
                     <div class="qbo-bar">
@@ -3341,9 +4125,7 @@ ${trnBlocks}
         function buildQboBankMemo(receipt) { return ReceiptCore.buildQboBankMemo(receipt); }
 
         function getExportableReceipts() {
-            const excludeHigh = document.getElementById('chkExcludeHighAnomalies')?.checked;
-            if (!excludeHigh) return receipts;
-            return receipts.filter(r => !(r.anomalies || []).some(a => a.code === 'TOTAL_MATH_ERROR' || a.code === 'SUBTOTAL_MISMATCH'));
+            return wfExportList();
         }
 
         function toggleQboExportModal() {
@@ -3356,7 +4138,7 @@ ${trnBlocks}
         }
 
         function renderQboModalPreview() {
-            const list = getExportableReceipts();
+            const list = wfPreviewList();
             const previewEl = document.getElementById('qboLivePreviewBlock');
             const summaryEl = document.getElementById('qboPreviewSummary');
 
@@ -3405,7 +4187,7 @@ ${trnBlocks}
             const list = getExportableReceipts();
             if (list.length === 0) return;
             const now = new Date();
-            triggerBlobDownload(ReceiptCore.buildBankFeedCsv(list), ReceiptCore.bankFeedFileName(now));
+            triggerBlobDownload(ReceiptCore.buildBankFeedCsv(list), ReceiptCore.bankFeedFileName(now, wfCurrentBatchId()));
             showToast('Downloaded QBO 4-Column Bank Feed CSV');
         }
 
@@ -3414,7 +4196,7 @@ ${trnBlocks}
             const list = getExportableReceipts();
             if (list.length === 0) return;
             const now = new Date();
-            triggerBlobDownload(ReceiptCore.buildSplitCsv(list), ReceiptCore.splitCsvFileName(now));
+            triggerBlobDownload(ReceiptCore.buildSplitCsv(list), ReceiptCore.splitCsvFileName(now, wfCurrentBatchId()));
             showToast('Downloaded QBO Multi-Category Split CSV');
         }
 
@@ -3423,7 +4205,7 @@ ${trnBlocks}
             const list = getExportableReceipts();
             if (list.length === 0) return;
             const now = new Date();
-            triggerBlobDownload(ReceiptCore.buildQboWebConnect(list, now), ReceiptCore.webConnectFileName(now), 'application/vnd.intu.qbo');
+            triggerBlobDownload(ReceiptCore.buildQboWebConnect(list, now), ReceiptCore.webConnectFileName(now, wfCurrentBatchId()), 'application/vnd.intu.qbo');
             showToast('Downloaded QuickBooks Web Connect (.QBO) file');
         }
 
@@ -3796,6 +4578,523 @@ ${trnBlocks}
         }, true);
         
         // =====================================================================
+        // REVIEW WORKFLOW: status, approval, accept-with-reason, reopen, export batches, audit log.
+        //   The rules live in the TypeScript core (ReceiptCore). This file is the browser glue:
+        //   - every state change is diffed by ChangeTracker, so no mutator has to log anything itself
+        //   - exported receipts are locked: their editors refuse changes and their inputs are disabled
+        //   - the audit log is hash-chained (tamper-evident, not tamper-proof) and saved with the session
+        // =====================================================================
+        let auditLog = [];
+        let batches = [];
+        let actorName = null;              // self-reported name; asked the first time a workflow action needs it
+        let wfSelectedBatchId = null;
+        let wfSource = null;               // how a new receipt arrived: upload, camera, scan-folder, drag-drop, sample, undo
+        let wfReason = null;               // bulk reason for deletions, e.g. 'clear-all'
+        let wfNamePending = null;          // action waiting for the name prompt
+        let wfAcceptTarget = null;         // { id, idx } of the flag being accepted
+        let wfSyncing = false;
+        const wfTracker = new ReceiptCore.ChangeTracker();
+        
+        const WF_STATUS = { captured: 'Captured', needs_review: 'Needs review', approved: 'Approved', exported: 'Exported' };
+        const WF_CHIP = { captured: 'chip-medium', needs_review: 'chip-high', approved: 'chip-ok', exported: 'chip-dark' };
+        
+        function wfEsc(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function wfIso() { return new Date().toISOString(); }
+        function wfActor() { return actorName || 'Owner'; }
+        function wfFind(id) { return receipts.find(r => r.id === id); }
+        function wfIsLocked(r) { return !!r && r.status === 'exported'; }
+        function wfTime(iso) {
+            if (!iso) return '';
+            return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
+        function wfAppendLog(drafts) {
+            if (drafts.length) auditLog = ReceiptCore.appendLogEntries(auditLog, drafts);
+        }
+        // Copies the named fields from `updated` onto the live receipt objects, so references held elsewhere stay valid
+        // (a thumbnail that is still loading must land on the receipt that is shown).
+        function wfMergeFields(updated, keys) {
+            updated.forEach((u, i) => {
+                const cur = receipts[i];
+                if (!cur || u === cur) return;
+                keys.forEach(k => { cur[k] = u[k]; });
+            });
+        }
+        
+        // ---- Tracking: runs after every state change ------------------------------
+        function wfSyncChanges() {
+            const at = wfIso();
+            const drafts = wfTracker.sync(receipts, { at, actor: wfActor(), source: wfSource, reason: wfReason });
+            const eff = ReceiptCore.applyWorkflowEffects(receipts, drafts, { at, actor: wfActor() });
+            wfMergeFields(eff.receipts, ['status', 'statusAt', 'statusBy']);
+            wfAppendLog(eff.drafts);
+            return eff.drafts.length > 0;
+        }
+        (function wfWireDashboard() {
+            const base = window.updateDashboard;
+            window.updateDashboard = function (...args) {
+                const result = base.apply(this, args);
+                if (!wfSyncing) {
+                    wfSyncing = true;
+                    try {
+                        if (wfSyncChanges()) base.apply(this, args);   // draw again with the new statuses (not via this wrapper)
+                    } finally { wfSyncing = false; }
+                }
+                wfUpdateKpi();
+                wfApplyLockUi();
+                if (document.getElementById('qboExportModal') && !document.getElementById('qboExportModal').classList.contains('hidden')) wfRenderBatchPanel();
+                return result;
+            };
+        })();
+        
+        function wfUpdateKpi() {
+            const queue = receipts.filter(r => r.status === 'captured' || r.status === 'needs_review').length;
+            const ready = receipts.filter(r => r.status === 'approved').length;
+            const flagEl = document.getElementById('statAnomalies');
+            if (flagEl) flagEl.textContent = queue;
+            const subEl = document.getElementById('statReadySub');
+            if (subEl) subEl.textContent = `${ready} ready to export`;
+        }
+        
+        // Exported receipts: the inspector's inputs and the structural buttons are disabled. The review panel stays live.
+        function wfApplyLockUi() {
+            const box = document.getElementById('inspectorContainer');
+            if (!box) return;
+            const locked = wfIsLocked(wfFind(selectedReceiptId));
+            box.querySelectorAll('input, select, textarea, button[onclick*="addLineItem"], button[onclick*="deleteReceipt"]').forEach(el => {
+                if (el.closest('[data-wf-panel]')) return;
+                el.disabled = locked;
+                el.title = locked ? 'Locked in an export batch. Reopen the receipt to change it.' : (el.title || '');
+            });
+        }
+        (function wfWireSelect() {
+            const base = window.selectReceipt;
+            window.selectReceipt = function (...args) {
+                const result = base.apply(this, args);
+                wfApplyLockUi();
+                return result;
+            };
+        })();
+        
+        // Edits to an exported receipt are refused (toast, and the inputs are redrawn so they show the saved value).
+        ['updateLineItem', 'updateLineItemCategory', 'updateReceiptMetadata', 'updateReceiptField', 'addLineItem',
+         'deleteLineItem', 'updateLineQty', 'updateReceiptMerchant', 'updateReceiptDate', 'deleteReceipt'].forEach(name => {
+            const base = window[name];
+            if (typeof base !== 'function') return;
+            window[name] = function (receiptId, ...rest) {
+                if (wfIsLocked(wfFind(receiptId))) {
+                    showToast('This receipt is locked in an export batch. Reopen it to change it.');
+                    updateDashboard();
+                    return;
+                }
+                return base.call(this, receiptId, ...rest);
+            };
+        });
+        
+        // Tags where a new receipt came from. The tag is read during the sync that creates the receipt.
+        function wfWithSource(name, source) {
+            const base = window[name];
+            if (typeof base !== 'function') return;
+            window[name] = function (...args) {
+                const prev = wfSource;
+                wfSource = source;
+                let out;
+                try { out = base.apply(this, args); } catch (e) { wfSource = prev; throw e; }
+                if (out && typeof out.then === 'function') return out.finally(() => { wfSource = prev; });
+                wfSource = prev;
+                return out;
+            };
+        }
+        wfWithSource('handleFileUpload', 'upload');
+        wfWithSource('scanGeneratedSample', 'sample');
+        wfWithSource('loadAllSamples', 'sample');
+        wfWithSource('captureCameraFrame', 'camera');
+        wfWithSource('pollScanFolder', 'scan-folder');
+        
+        // ---- Status, approval, flags ------------------------------------------------
+        function wfStatusChip(r) {
+            const s = r.status || 'needs_review';
+            return `<span class="chip ${WF_CHIP[s]}">${WF_STATUS[s]}</span>`;
+        }
+        
+        function wfShow(v) { return v === null || v === undefined || v === '' ? '—' : wfEsc(v); }
+        function wfDescribe(e) {
+            switch (e.action) {
+                case 'receipt.created': return `Added (${wfShow(e.note)})`;
+                case 'receipt.deleted': return `Deleted${e.note ? ` (${wfEsc(e.note)})` : ''}`;
+                case 'field.changed': return `${wfEsc(e.field)}${e.line ? ` on line ${e.line}` : ''}: ${wfShow(e.from)} → ${wfShow(e.to)}${e.note ? ` (${wfEsc(e.note)})` : ''}`;
+                case 'item.added': return `Line added: ${wfShow(e.to)}`;
+                case 'item.deleted': return `Line deleted: ${wfShow(e.from)}`;
+                case 'status.changed': return `Status ${WF_STATUS[e.from] || wfShow(e.from)} → ${WF_STATUS[e.to] || wfShow(e.to)}${e.note ? ` (${wfEsc(e.note)})` : ''}`;
+                case 'flag.accepted': return `Flag accepted: ${wfShow(e.to)} — ${wfShow(e.note)}`;
+                case 'batch.created': return `Batch ${wfShow(e.batchId)} created (${wfShow(e.note)})`;
+                case 'batch.downloaded': return `Downloaded ${wfShow(e.to)} from ${wfShow(e.batchId)}`;
+                case 'batch.receipt.reopened': return `Reopened for correction (revision ${wfShow(e.from)} → ${wfShow(e.to)}): ${wfShow(e.note)}`;
+                case 'session.migrated': return wfEsc(e.note);
+                default: return `${wfEsc(e.action)}${e.note ? `: ${wfEsc(e.note)}` : ''}`;
+            }
+        }
+        
+        function wfFlagActions(receipt, a) {
+            const waiver = ReceiptCore.waiverFor(receipt, a);
+            if (waiver) return `<p class="audit-detail" style="font-weight:600">Accepted by ${wfEsc(waiver.by)} on ${wfTime(waiver.at)}: ${wfEsc(waiver.note)}</p>`;
+            if (a.severity !== 'high') return '';
+            const idx = (receipt.anomalies || []).indexOf(a);
+            return `<div style="margin-top:0.4rem"><button class="text-link" data-wf onclick="wfOpenAccept('${receipt.id}', ${idx})">Accept with reason…</button></div>`;
+        }
+        
+        function wfPanelHtml(r) {
+            const s = r.status || 'needs_review';
+            const blockers = s === 'exported' ? [] : ReceiptCore.approvalBlockers(r, coreCtx());
+            const history = auditLog.filter(e => e.receiptId === r.id).slice(-25).reverse();
+            let action;
+            if (s === 'exported') {
+                action = `<button class="btn" data-wf onclick="wfOpenReopen('${r.id}')"><span>Reopen for correction…</span></button>`;
+            } else if (s === 'approved') {
+                action = `<button class="btn btn-ghost" data-wf onclick="wfSendBack('${r.id}')"><span>Send back to review</span></button>`;
+            } else {
+                action = `<button class="btn" data-wf onclick="wfApprove('${r.id}')"><span>Approve</span></button>`;
+            }
+            const blockHtml = blockers.length && s !== 'approved' && s !== 'exported'
+                ? `<div class="note" style="margin-top:0.6rem"><p class="note-title">Can't approve yet</p><ul class="clearall-list">${blockers.map(b => `<li>${wfEsc(b)}</li>`).join('')}</ul></div>`
+                : '';
+            const lockHtml = s === 'exported'
+                ? `<p class="muted" style="margin-top:0.5rem">Locked in batch <span class="mono">${wfEsc(r.batchId)}</span> on ${wfTime(r.exportedAt)}. Reopen it with a reason to change it.</p>`
+                : '';
+            const historyHtml = history.length
+                ? `<ul class="clearall-list">${history.map(e => `<li><span class="mono">${wfTime(e.at)}</span> ${wfEsc(e.actor)} · ${wfDescribe(e)}</li>`).join('')}</ul>`
+                : '<p class="muted">No history yet.</p>';
+            return `
+                            <div data-wf-panel class="note" style="display:flex;flex-direction:column;gap:0.4rem">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap">
+                                    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+                                        <span class="section-label" style="margin:0">Review</span>
+                                        <span class="chip ${WF_CHIP[s]}">${WF_STATUS[s]}</span>
+                                        ${r.revision > 0 ? `<span class="chip chip-accent">Correction r${r.revision}</span>` : ''}
+                                    </div>
+                                    <div>${action}</div>
+                                </div>
+                                ${lockHtml}
+                                ${blockHtml}
+                                <details class="raw-ocr" style="margin-top:0.4rem">
+                                    <summary><span>History (${history.length})</span></summary>
+                                    <div style="padding:0.5rem 0">${historyHtml}</div>
+                                </details>
+                            </div>
+                            `;
+        }
+        
+        // Actions that record who did them ask for the name once.
+        function wfEnsureName(then) {
+            if (actorName) return then();
+            wfNamePending = then;
+            wfOpenName();
+        }
+        function wfOpenName() {
+            document.getElementById('wfNameInput').value = actorName || '';
+            document.getElementById('wfNameModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('wfNameInput').focus(), 50);
+        }
+        function wfCloseName() {
+            document.getElementById('wfNameModal').classList.add('hidden');
+            wfNamePending = null;
+        }
+        function wfSaveName() {
+            const name = document.getElementById('wfNameInput').value.trim();
+            if (!name) { showToast('Enter a name'); return; }
+            actorName = name;
+            const then = wfNamePending;
+            wfNamePending = null;
+            document.getElementById('wfNameModal').classList.add('hidden');
+            scheduleAutosave();
+            if (then) then();
+            else updateDashboard();
+        }
+        
+        function wfApprove(id) {
+            wfEnsureName(() => {
+                const r = wfFind(id);
+                if (!r) return;
+                const blockers = ReceiptCore.approvalBlockers(r, coreCtx());
+                if (blockers.length) {
+                    showToast(blockers[0]);
+                    updateDashboard();
+                    return;
+                }
+                wfSetStatus(r, 'approve', null);
+            });
+        }
+        function wfSendBack(id) {
+            wfEnsureName(() => {
+                const r = wfFind(id);
+                if (r) wfSetStatus(r, 'send_back', null);
+            });
+        }
+        function wfSetStatus(r, event, note) {
+            const from = r.status || 'needs_review';
+            const to = ReceiptCore.transition(from, event);
+            if (!to) { showToast(`Cannot change this receipt from ${WF_STATUS[from]} that way`); return; }
+            const at = wfIso();
+            r.status = to;
+            r.statusAt = at;
+            r.statusBy = wfActor();
+            wfAppendLog([{ at, actor: wfActor(), action: 'status.changed', receiptId: r.id, batchId: null, field: 'status', line: null, from, to, note }]);
+            updateDashboard();
+        }
+        
+        function wfOpenAccept(id, idx) {
+            const r = wfFind(id);
+            const a = r && (r.anomalies || [])[idx];
+            if (!a) return;
+            wfEnsureName(() => {
+                wfAcceptTarget = { id, idx };
+                document.getElementById('wfAcceptTitle').textContent = a.title;
+                document.getElementById('wfAcceptDetail').textContent = a.detail;
+                document.getElementById('wfAcceptNote').value = '';
+                document.getElementById('wfAcceptError').textContent = '';
+                document.getElementById('wfAcceptModal').classList.remove('hidden');
+                setTimeout(() => document.getElementById('wfAcceptNote').focus(), 50);
+            });
+        }
+        function wfCloseAccept() {
+            document.getElementById('wfAcceptModal').classList.add('hidden');
+            wfAcceptTarget = null;
+        }
+        function wfConfirmAccept() {
+            const r = wfFind(wfAcceptTarget?.id);
+            const a = r && (r.anomalies || [])[wfAcceptTarget.idx];
+            if (!a) { wfCloseAccept(); return; }
+            const res = ReceiptCore.acceptFlag(a, document.getElementById('wfAcceptNote').value, wfActor(), wfIso());
+            if (!res.ok) { document.getElementById('wfAcceptError').textContent = res.error; return; }
+            r.waivers = [...(r.waivers || []), res.waiver];
+            wfAppendLog([{ at: res.waiver.at, actor: wfActor(), action: 'flag.accepted', receiptId: r.id, batchId: null, field: a.code, line: null, from: null, to: a.title, note: res.waiver.note }]);
+            wfCloseAccept();
+            updateDashboard();
+        }
+        
+        function wfOpenReopen(id) {
+            const r = wfFind(id);
+            if (!r) return;
+            wfEnsureName(() => {
+                wfReopenTarget = id;
+                document.getElementById('wfReopenTitle').textContent = `${r.merchant} · ${r.date} · $${Number(r.total).toFixed(2)}`;
+                document.getElementById('wfReopenNote').value = '';
+                document.getElementById('wfReopenError').textContent = '';
+                document.getElementById('wfReopenModal').classList.remove('hidden');
+                setTimeout(() => document.getElementById('wfReopenNote').focus(), 50);
+            });
+        }
+        let wfReopenTarget = null;
+        function wfCloseReopen() {
+            document.getElementById('wfReopenModal').classList.add('hidden');
+            wfReopenTarget = null;
+        }
+        function wfConfirmReopen() {
+            const r = wfFind(wfReopenTarget);
+            if (!r) { wfCloseReopen(); return; }
+            const res = ReceiptCore.reopenReceipt(r, document.getElementById('wfReopenNote').value, wfActor(), new Date());
+            if (!res.ok) { document.getElementById('wfReopenError').textContent = res.error; return; }
+            Object.assign(r, { status: res.receipt.status, statusAt: res.receipt.statusAt, statusBy: res.receipt.statusBy, revision: res.receipt.revision });
+            wfAppendLog(res.drafts);
+            wfCloseReopen();
+            updateDashboard();
+        }
+        
+        // ---- Export batches ---------------------------------------------------------
+        function wfSelectedBatch() { return batches.find(b => b.id === wfSelectedBatchId) || null; }
+        function wfCurrentBatchId() { return wfSelectedBatchId || undefined; }
+        
+        // getExportableReceipts() (the download functions) delegates here. Without a selected batch nothing can be exported.
+        function wfExportList() {
+            const b = wfSelectedBatch();
+            if (!b) { showToast('Create an export batch first'); return []; }
+            return b.receipts;
+        }
+        // The live preview shows the approved set before a batch exists, otherwise the selected batch.
+        function wfPreviewList() {
+            const b = wfSelectedBatch();
+            return b ? b.receipts : receipts.filter(r => r.status === 'approved');
+        }
+        
+        function wfExportCounts() {
+            const approved = receipts.filter(r => r.status === 'approved');
+            return {
+                approved: approved.length,
+                approvedTotal: approved.reduce((s, r) => s + (Number(r.total) || 0), 0),
+                review: receipts.filter(r => r.status === 'captured' || r.status === 'needs_review').length,
+                exported: receipts.filter(r => r.status === 'exported').length
+            };
+        }
+        
+        function wfCreateBatch() {
+            wfEnsureName(() => {
+                const res = ReceiptCore.createBatch(receipts, batches, wfActor(), new Date());
+                if (!res.ok) { showToast(res.error); return; }
+                wfMergeFields(res.receipts, ['status', 'statusAt', 'statusBy', 'batchId', 'exportedAt']);
+                batches = res.batches;
+                wfAppendLog(res.drafts);
+                wfSelectedBatchId = res.batch.id;
+                showToast(`Created ${res.batch.id}: ${res.batch.count} receipt${res.batch.count === 1 ? '' : 's'} exported and locked`);
+                updateDashboard();
+                renderQboModalPreview();
+            });
+        }
+        
+        function wfSelectBatch(id) {
+            wfSelectedBatchId = id;
+            renderQboModalPreview();
+            wfRenderBatchPanel();
+            scheduleAutosave();
+        }
+        
+        function wfRecordDownload(format) {
+            const b = wfSelectedBatch();
+            if (!b) return;
+            const at = wfIso();
+            b.downloads.push({ format, at });
+            wfAppendLog([{ at, actor: wfActor(), action: 'batch.downloaded', receiptId: null, batchId: b.id, field: null, line: null, from: null, to: format, note: null }]);
+            scheduleAutosave();
+            wfRenderBatchPanel();
+        }
+        [['downloadQboBankFeedCSV', 'bank-feed-csv'], ['downloadQboSplitJournalCSV', 'split-csv'], ['downloadQboWebConnectFile', 'qbo-web-connect']]
+            .forEach(([name, format]) => {
+                const base = window[name];
+                if (typeof base !== 'function') return;
+                window[name] = function (...args) {
+                    const out = base.apply(this, args);
+                    wfRecordDownload(format);
+                    return out;
+                };
+            });
+        
+        (function wfWireExportModal() {
+            const base = window.toggleQboExportModal;
+            window.toggleQboExportModal = function (...args) {
+                const out = base.apply(this, args);
+                wfRenderBatchPanel();
+                return out;
+            };
+        })();
+        
+        function wfRenderBatchPanel() {
+            const el = document.getElementById('wfBatchPanel');
+            if (!el) return;
+            const c = wfExportCounts();
+            const summary = document.getElementById('wfExportSummary');
+            if (summary) summary.textContent = `Ready: ${c.approved} approved ($${c.approvedTotal.toFixed(2)}) · Needs review: ${c.review} not included · Already exported: ${c.exported}`;
+            const btn = document.getElementById('wfCreateBatchBtn');
+            if (btn) btn.disabled = c.approved === 0;
+            const rows = batches.slice().reverse().map(b => `
+                                <tr>
+                                    <td class="mono">${wfEsc(b.id)}</td>
+                                    <td class="mono">${wfTime(b.at)}</td>
+                                    <td>${b.count}${b.corrections.length ? ` <span class="chip chip-accent">${b.corrections.length} correction${b.corrections.length === 1 ? '' : 's'}</span>` : ''}</td>
+                                    <td class="num mono">$${Number(b.total).toFixed(2)}</td>
+                                    <td class="muted">${b.downloads.length} download${b.downloads.length === 1 ? '' : 's'}</td>
+                                    <td><button class="text-link" onclick="wfSelectBatch('${b.id}')">${b.id === wfSelectedBatchId ? 'Selected' : 'Select'}</button></td>
+                                </tr>`).join('');
+            el.innerHTML = `
+                        <div style="margin-bottom:1rem">
+                            <div class="table-head">
+                                <h4 class="section-label" style="margin:0">Batch history</h4>
+                                <span class="muted">Downloads come from the selected batch. Re-downloads never change.</span>
+                            </div>
+                            ${batches.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Batch</th><th>Created</th><th>Receipts</th><th class="num">Total</th><th>Downloads</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">No batches yet. Approve receipts, then create an export batch.</p>'}
+                        </div>`;
+        }
+        
+        // ---- Audit log window -------------------------------------------------------
+        function wfOpenLog() {
+            document.getElementById('wfLogModal').classList.remove('hidden');
+            document.getElementById('wfLogActor').value = actorName || '';
+            wfRenderLog();
+            lucide.createIcons();
+        }
+        function wfCloseLog() { document.getElementById('wfLogModal').classList.add('hidden'); }
+        function wfLogFiltered() {
+            const q = document.getElementById('wfLogSearch').value.trim().toLowerCase();
+            const action = document.getElementById('wfLogAction').value;
+            return auditLog.filter(e => {
+                if (action !== 'all' && e.action !== action) return false;
+                if (!q) return true;
+                const r = receipts.find(x => x.id === e.receiptId);
+                return [e.receiptId, e.batchId, e.actor, e.note, e.field, r && r.merchant, JSON.stringify(e.from ?? ''), JSON.stringify(e.to ?? '')]
+                    .some(v => String(v ?? '').toLowerCase().includes(q));
+            });
+        }
+        function wfRenderLog() {
+            const list = wfLogFiltered();
+            const shown = list.slice(-500).reverse();
+            document.getElementById('wfLogCount').textContent = `${list.length} of ${auditLog.length} entries${list.length > 500 ? ' (showing the latest 500)' : ''}`;
+            document.getElementById('wfLogRows').innerHTML = shown.map(e => {
+                const r = receipts.find(x => x.id === e.receiptId);
+                const rec = e.receiptId ? `${wfEsc(r ? r.merchant : e.receiptId)}` : '';
+                return `<tr><td class="mono">${e.seq}</td><td class="mono">${wfTime(e.at)}</td><td>${wfEsc(e.actor)}</td><td class="mono">${wfEsc(e.action)}</td><td>${rec}</td><td class="mono">${wfShow(e.batchId)}</td><td>${wfDescribe(e)}</td></tr>`;
+            }).join('') || '<tr><td colspan="7" class="muted">No entries match.</td></tr>';
+        }
+        function wfVerifyLog() {
+            const res = ReceiptCore.verifyLog(auditLog);
+            const el = document.getElementById('wfLogVerify');
+            el.className = res.ok ? 'chip chip-ok' : 'chip chip-high';
+            el.textContent = res.ok
+                ? `Integrity OK · ${auditLog.length} entries`
+                : `Integrity FAILED at entry ${res.seq}: ${res.reason}`;
+        }
+        function wfSaveActor() {
+            const name = document.getElementById('wfLogActor').value.trim();
+            if (!name) { showToast('Enter a name'); return; }
+            actorName = name;
+            scheduleAutosave();
+            showToast(`Changes will be recorded as "${name}"`);
+        }
+        function wfDownloadLog() {
+            const cols = ['seq', 'at', 'actor', 'action', 'receiptId', 'batchId', 'field', 'line', 'from', 'to', 'note', 'hash'];
+            const cell = v => escapeCsvCell(v === null || v === undefined ? '' : (typeof v === 'object' ? JSON.stringify(v) : v));
+            const csv = [cols.join(','), ...auditLog.map(e => cols.map(c => cell(e[c])).join(','))].join('\n');
+            triggerBlobDownload(csv, `receipt-audit-log_${new Date().toISOString().slice(0, 10)}.csv`);
+        }
+        
+        // ---- Settings and account lists: logged directly (they are not receipt fields) ----
+        function wfLogSetting(action, note, from = null, to = null) {
+            if (!persistReady) return;   // the startup load is not a change
+            wfAppendLog([{ at: wfIso(), actor: wfActor(), action, receiptId: null, batchId: null, field: null, line: null, from, to, note }]);
+        }
+        (function wfWireSettings() {
+            const saveCoa = window.saveCoaToStorage;
+            window.saveCoaToStorage = function (...args) {
+                const out = saveCoa.apply(this, args);
+                wfLogSetting('coa.changed', 'chart of accounts');
+                return out;
+            };
+            const toggle = window.toggleStartupPhaseMode;
+            window.toggleStartupPhaseMode = function (...args) {
+                const before = startupPhaseMode;
+                const out = toggle.apply(this, args);
+                if (startupPhaseMode !== before) wfLogSetting('settings.changed', 'CapEx mode', before, startupPhaseMode);
+                return out;
+            };
+            ['addListEntry', 'renameListEntry', 'updatePayMatch', 'toggleListEntryArchive'].forEach(name => {
+                const base = window[name];
+                if (typeof base !== 'function') return;
+                window[name] = function (...args) {
+                    const out = base.apply(this, args);
+                    wfLogSetting('lists.changed', `${name} ${args.filter(a => typeof a === 'string').join(' ')}`.trim());
+                    return out;
+                };
+            });
+        })();
+        
+        // Esc closes whichever workflow dialog is open.
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            for (const [id, close] of [['wfNameModal', wfCloseName], ['wfAcceptModal', wfCloseAccept], ['wfReopenModal', wfCloseReopen], ['wfLogModal', wfCloseLog]]) {
+                const el = document.getElementById(id);
+                if (el && !el.classList.contains('hidden')) { close(); e.stopImmediatePropagation(); return; }
+            }
+        }, true);
+        
+        // =====================================================================
         // SESSION PERSISTENCE
         //   Layer 1: autosave to IndexedDB on every change (survives crashes / closed tabs)
         //   Layer 2: optional linked save file on disk (Chrome / Edge File System Access API)
@@ -3895,6 +5194,9 @@ ${trnBlocks}
                 coaAccounts,
                 paymentAccounts: paymentAccountList,
                 fleetClasses: fleetClassList,
+                actorName,
+                auditLog,
+                batches,
                 receipts: receipts.map(({ imageUrl, thumbUrl, ...rest }) => rest)   // full photos are never persisted; thumbnails are stored separately
             };
         }
@@ -3946,10 +5248,17 @@ ${trnBlocks}
                 startupPhaseMode ? 'CapEx Mode: ON' : 'CapEx Mode: OFF (Year 2+)';
         }
         async function applySession(s) {
-            coaAccounts = s.coaAccounts;
-            loadManagedLists(s);
-            receipts = s.receipts.map(r => ({ ...r, imageUrl: null, thumbUrl: null }));
+            // Older files (no review workflow yet) get every receipt set to Needs review and a migration entry in the log.
+            const m = ReceiptCore.migrateSession(s, new Date().toISOString(), 'Owner');
+            coaAccounts = m.coaAccounts;
+            loadManagedLists(m);
+            receipts = m.receipts.map(r => ({ ...r, imageUrl: null, thumbUrl: null }));
             await hydrateThumbs(s.thumbs);
+            auditLog = m.auditLog;
+            batches = m.batches;
+            actorName = s.actorName || null;
+            wfSelectedBatchId = batches.length ? batches[batches.length - 1].id : null;
+            wfTracker.seed(receipts);          // restoring must not log every receipt as "created"
             selectedReceiptId = receipts.some(r => r.id === s.selectedReceiptId) ? s.selectedReceiptId : (receipts[0]?.id || null);
             startupPhaseMode = s.startupPhaseMode !== false;
             syncCapexToggleUi();
@@ -4411,10 +5720,13 @@ ${trnBlocks}
             dz.addEventListener('drop', async e => {
                 const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
                 if (!files.length) { showToast('Drop image files (JPG, PNG or WEBP) — PDFs are not supported'); return; }
-                for (const f of files) {
-                    try { await processReceiptImageLocally(await downscaleImageDataUrl(await blobToDataUrl(f)), f.name); }
-                    catch (err) { showToast(`Could not read "${f.name}": ${err.message}`); }
-                }
+                wfSource = 'drag-drop';
+                try {
+                    for (const f of files) {
+                        try { await processReceiptImageLocally(await downscaleImageDataUrl(await blobToDataUrl(f)), f.name); }
+                        catch (err) { showToast(`Could not read "${f.name}": ${err.message}`); }
+                    }
+                } finally { wfSource = null; }
             });
             // a file dropped anywhere else should not make the browser navigate away from the app
             window.addEventListener('dragover', e => e.preventDefault());
@@ -4847,7 +6159,9 @@ ${trnBlocks}
             receipts = [];
             selectedReceiptId = null;
             closeClearAll();
+            wfReason = 'clear-all';                            // every removal is logged with this reason
             updateDashboard();                                 // re-renders, autosaves, and refreshes the buttons
+            wfReason = null;
             showToast(`Cleared ${n} receipt${n === 1 ? '' : 's'} — click “Undo clear” in the queue to bring them back`);
         }
         function undoClearAll() {
@@ -4856,7 +6170,9 @@ ${trnBlocks}
             selectedReceiptId = clearedBackup.selectedReceiptId;
             const n = receipts.length;
             clearedBackup = null;
+            wfSource = 'undo';
             updateDashboard();
+            wfSource = null;
             showToast(`Restored ${n} receipt${n === 1 ? '' : 's'}`);
         }
         
