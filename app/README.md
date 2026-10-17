@@ -17,11 +17,11 @@ tests/
   core/golden.test.ts     TypeScript core must equal what the shipped app produced on a seeded corpus
   oracle/                 harness that runs a release in a VM; also checks the released apps reproduce the golden data
   oracle/wired.test.ts    the apps in releases/ (rules delegating to the core) must equal the pre-extraction outputs
+  golden/core.json        the recorded legacy outputs (about 1,000 cases, 8 context variants)
 scripts/
   bundle-core.mjs         esbuild: src/core -> one IIFE exposing the global ReceiptCore
   wire-core.mjs           swaps the app's rule functions for thin adapters over ReceiptCore (acorn-based)
   build-releases.mjs      bundle + python generator + wire
-  golden/core.json        the recorded legacy outputs (about 1,000 cases, 8 context variants)
 ```
 
 ## Commands
