@@ -89,7 +89,26 @@ export interface Receipt {
   fuelMeta?: string | null;
   computedSubtotal?: number;
   expectedTotal?: number;
+  // review workflow (schema 2)
+  status?: ReceiptStatus;
+  statusAt?: string;
+  statusBy?: string;
+  waivers?: Waiver[];
+  batchId?: string | null;
+  exportedAt?: string | null;
+  revision?: number;
   [extra: string]: unknown;
+}
+
+export type ReceiptStatus = 'captured' | 'needs_review' | 'approved' | 'exported';
+
+/** A High flag accepted with a written reason. Matches the flag by `key` = code + '|' + title. */
+export interface Waiver {
+  code: string;
+  key: string;
+  note: string;
+  by: string;
+  at: string;
 }
 
 export interface ParsedReceipt {

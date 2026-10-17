@@ -31,8 +31,15 @@ var ReceiptCore = (() => {
     EXCESSIVE_TIP_PCT: () => EXCESSIVE_TIP_PCT,
     FIXED_ASSET_ACCOUNT_ID: () => FIXED_ASSET_ACCOUNT_ID,
     FIXED_ASSET_FALLBACK_NAME: () => FIXED_ASSET_FALLBACK_NAME,
+    GENESIS_HASH: () => GENESIS_HASH,
     MATH_TOLERANCE: () => MATH_TOLERANCE,
+    MIN_WAIVER_NOTE_LENGTH: () => MIN_WAIVER_NOTE_LENGTH,
     PAYMENT_MATCH_DEFAULTS: () => PAYMENT_MATCH_DEFAULTS,
+    STATUSES: () => STATUSES,
+    acceptFlag: () => acceptFlag,
+    appendLogEntries: () => appendLogEntries,
+    appendLogEntry: () => appendLogEntry,
+    approvalBlockers: () => approvalBlockers,
     auditAndCategorizeReceipt: () => auditAndCategorizeReceipt,
     bankFeedFileName: () => bankFeedFileName,
     buildBankFeedCsv: () => buildBankFeedCsv,
@@ -45,12 +52,24 @@ var ReceiptCore = (() => {
     escapeCsvCell: () => escapeCsvCell,
     exportableReceipts: () => exportableReceipts,
     extractFuelMetadata: () => extractFuelMetadata,
+    flagKey: () => flagKey,
     formatDateForQBO: () => formatDateForQBO,
     getActiveCategories: () => getActiveCategories,
+    hasUnresolvedHighFlag: () => hasUnresolvedHighFlag,
+    hashEntry: () => hashEntry,
     inferLineItemCategory: () => inferLineItemCategory,
+    initialStatus: () => initialStatus,
+    isFlagResolved: () => isFlagResolved,
+    isIsoDate: () => isIsoDate,
     mapPaymentMethodToAccount: () => mapPaymentMethodToAccount,
     parseRawOcrTextToReceipt: () => parseRawOcrTextToReceipt,
+    sha256Hex: () => sha256Hex,
     splitCsvFileName: () => splitCsvFileName,
+    stableStringify: () => stableStringify,
+    statusAfterEdit: () => statusAfterEdit,
+    transition: () => transition,
+    verifyLog: () => verifyLog,
+    waiverFor: () => waiverFor,
     webConnectFileName: () => webConnectFileName
   });
 
@@ -574,5 +593,252 @@ ${trnBlocks}
 </OFX>`;
   }
   var webConnectFileName = (now) => `ReceiptAudit_${isoDay(now)}.qbo`;
+
+  // src/core/sha256.ts
+  var K = new Uint32Array([
+    1116352408,
+    1899447441,
+    3049323471,
+    3921009573,
+    961987163,
+    1508970993,
+    2453635748,
+    2870763221,
+    3624381080,
+    310598401,
+    607225278,
+    1426881987,
+    1925078388,
+    2162078206,
+    2614888103,
+    3248222580,
+    3835390401,
+    4022224774,
+    264347078,
+    604807628,
+    770255983,
+    1249150122,
+    1555081692,
+    1996064986,
+    2554220882,
+    2821834349,
+    2952996808,
+    3210313671,
+    3336571891,
+    3584528711,
+    113926993,
+    338241895,
+    666307205,
+    773529912,
+    1294757372,
+    1396182291,
+    1695183700,
+    1986661051,
+    2177026350,
+    2456956037,
+    2730485921,
+    2820302411,
+    3259730800,
+    3345764771,
+    3516065817,
+    3600352804,
+    4094571909,
+    275423344,
+    430227734,
+    506948616,
+    659060556,
+    883997877,
+    958139571,
+    1322822218,
+    1537002063,
+    1747873779,
+    1955562222,
+    2024104815,
+    2227730452,
+    2361852424,
+    2428436474,
+    2756734187,
+    3204031479,
+    3329325298
+  ]);
+  function rotr(x, n) {
+    return x >>> n | x << 32 - n;
+  }
+  function sha256Hex(text) {
+    const bytes = new TextEncoder().encode(text);
+    const bitLength = bytes.length * 8;
+    const paddedLength = bytes.length + 9 + 63 >> 6 << 6;
+    const data = new Uint8Array(paddedLength);
+    data.set(bytes);
+    data[bytes.length] = 128;
+    const view = new DataView(data.buffer);
+    view.setUint32(paddedLength - 8, Math.floor(bitLength / 4294967296));
+    view.setUint32(paddedLength - 4, bitLength >>> 0);
+    const h = new Uint32Array([
+      1779033703,
+      3144134277,
+      1013904242,
+      2773480762,
+      1359893119,
+      2600822924,
+      528734635,
+      1541459225
+    ]);
+    const w = new Uint32Array(64);
+    for (let off = 0; off < paddedLength; off += 64) {
+      for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+      for (let i = 16; i < 64; i++) {
+        const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ w[i - 15] >>> 3;
+        const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ w[i - 2] >>> 10;
+        w[i] = w[i - 16] + s0 + w[i - 7] + s1 >>> 0;
+      }
+      let a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+      for (let i = 0; i < 64; i++) {
+        const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        const ch = e & f ^ ~e & g;
+        const t1 = hh + S1 + ch + K[i] + w[i] >>> 0;
+        const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        const maj = a & b ^ a & c ^ b & c;
+        const t2 = S0 + maj >>> 0;
+        hh = g;
+        g = f;
+        f = e;
+        e = d + t1 >>> 0;
+        d = c;
+        c = b;
+        b = a;
+        a = t1 + t2 >>> 0;
+      }
+      h[0] = h[0] + a >>> 0;
+      h[1] = h[1] + b >>> 0;
+      h[2] = h[2] + c >>> 0;
+      h[3] = h[3] + d >>> 0;
+      h[4] = h[4] + e >>> 0;
+      h[5] = h[5] + f >>> 0;
+      h[6] = h[6] + g >>> 0;
+      h[7] = h[7] + hh >>> 0;
+    }
+    let hex = "";
+    for (let i = 0; i < 8; i++) hex += h[i].toString(16).padStart(8, "0");
+    return hex;
+  }
+
+  // src/core/auditlog.ts
+  var GENESIS_HASH = "0".repeat(64);
+  function stableStringify(value) {
+    if (value === void 0) return "null";
+    if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+    if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
+    const obj = value;
+    const keys = Object.keys(obj).filter((k) => obj[k] !== void 0).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
+  }
+  var nul = (v) => v === void 0 ? null : v;
+  function hashEntry(e) {
+    return sha256Hex(stableStringify([
+      e.seq,
+      e.at,
+      e.actor,
+      e.action,
+      nul(e.receiptId),
+      nul(e.batchId),
+      nul(e.field),
+      nul(e.line),
+      nul(e.from),
+      nul(e.to),
+      nul(e.note),
+      e.prev
+    ]));
+  }
+  function appendLogEntry(log, draft) {
+    const last = log[log.length - 1];
+    const seq = last ? last.seq + 1 : 1;
+    const prev = last ? last.hash : GENESIS_HASH;
+    const withoutHash = { ...draft, seq, prev };
+    return [...log, { ...withoutHash, hash: hashEntry(withoutHash) }];
+  }
+  function appendLogEntries(log, drafts) {
+    return drafts.reduce((acc, d) => appendLogEntry(acc, d), [...log]);
+  }
+  function verifyLog(log) {
+    let prev = GENESIS_HASH;
+    for (let i = 0; i < log.length; i++) {
+      const e = log[i];
+      if (e.seq !== i + 1) return { ok: false, seq: e.seq, reason: `sequence should be ${i + 1}, found ${e.seq}` };
+      if (e.prev !== prev) return { ok: false, seq: e.seq, reason: "previous hash does not match the entry before it" };
+      if (hashEntry(e) !== e.hash) return { ok: false, seq: e.seq, reason: "entry contents do not match their hash" };
+      prev = e.hash;
+    }
+    return { ok: true };
+  }
+
+  // src/core/workflow.ts
+  var STATUSES = ["captured", "needs_review", "approved", "exported"];
+  var MIN_WAIVER_NOTE_LENGTH = 3;
+  var TRANSITIONS = {
+    captured: { escalate: "needs_review", send_back: "needs_review", approve: "approved", edit: "captured" },
+    needs_review: { escalate: "needs_review", send_back: "needs_review", approve: "approved", edit: "needs_review" },
+    approved: { escalate: "needs_review", send_back: "needs_review", edit: "needs_review", export: "exported" },
+    exported: { reopen: "needs_review" }
+  };
+  function transition(status, event) {
+    return TRANSITIONS[status][event] ?? null;
+  }
+  function initialStatus(receipt) {
+    return hasUnresolvedHighFlag(receipt) ? "needs_review" : "captured";
+  }
+  function statusAfterEdit(status) {
+    return transition(status, "edit") ?? status;
+  }
+  function flagKey(anomaly) {
+    return `${anomaly.code}|${anomaly.title}`;
+  }
+  function waiverFor(receipt, anomaly) {
+    const key = flagKey(anomaly);
+    return (receipt.waivers || []).find((w) => w.key === key);
+  }
+  function isFlagResolved(receipt, anomaly) {
+    return anomaly.severity !== "high" || waiverFor(receipt, anomaly) !== void 0;
+  }
+  function hasUnresolvedHighFlag(receipt) {
+    return (receipt.anomalies || []).some((a) => !isFlagResolved(receipt, a));
+  }
+  function acceptFlag(anomaly, note, by, at) {
+    const trimmed = (note || "").trim();
+    if (trimmed.length < MIN_WAIVER_NOTE_LENGTH) {
+      return { ok: false, error: `Write a reason of at least ${MIN_WAIVER_NOTE_LENGTH} characters.` };
+    }
+    return { ok: true, waiver: { code: anomaly.code, key: flagKey(anomaly), note: trimmed, by, at } };
+  }
+  function isIsoDate(value) {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [y, m, d] = value.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+  }
+  function approvalBlockers(receipt, ctx) {
+    const blockers = [];
+    if (!receipt.merchant || !receipt.merchant.trim()) blockers.push("Merchant is empty.");
+    if (!isIsoDate(receipt.date)) blockers.push("Date is not a real YYYY-MM-DD date. Fix it with the date box.");
+    if (!ctx.paymentAccounts.some((a) => a.name === receipt.paidFromAccount && !a.archived)) {
+      blockers.push("Paid-from account is missing or archived.");
+    }
+    if (!ctx.fleetClasses.some((c) => c.name === receipt.vanClass && !c.archived)) {
+      blockers.push("Van is missing or archived.");
+    }
+    if (!(Number(receipt.total) > 0)) blockers.push("Total must be greater than zero.");
+    const items = receipt.items || [];
+    if (items.length === 0) blockers.push("Receipt has no line items.");
+    const active = getActiveCategories(ctx);
+    items.forEach((item, i) => {
+      if (!active.some((c) => c.name === item.category)) {
+        blockers.push(`Line ${i + 1} ("${item.name}") is on an inactive or missing account.`);
+      }
+    });
+    for (const a of receipt.anomalies || []) {
+      if (!isFlagResolved(receipt, a)) blockers.push(`Unresolved High flag: ${a.title}`);
+    }
+    return blockers;
+  }
   return __toCommonJS(index_exports);
 })();
